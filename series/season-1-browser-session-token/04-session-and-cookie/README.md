@@ -9,7 +9,7 @@ status: draft
 
 সোমবার সকাল। ফাঁসের ঘটনার পর KenaKata-র প্রথম পুরো কর্মদিবস।
 
-রাফি দোকান খুলে নতুন passphrase টাইপ করে login করল। Argon2id তাকে চিনল। তারপর সে অর্ডারের তালিকা খুলল, একটা অর্ডারে ঢুকল, ফিরে এল, আরেকটায় ঢুকল। নীরা ফোনে তার সঙ্গে কথা বলছিল।
+রাফি দোকান খুলে নতুন passphrase টাইপ করে login করল। Server Argon2id দিয়ে stored password hash যাচাই করল; যাচাই সফল হওয়ায় login হলো। তারপর সে অর্ডারের তালিকা খুলল, একটা অর্ডারে ঢুকল, ফিরে এল, আরেকটায় ঢুকল। নীরা ফোনে তার সঙ্গে কথা বলছিল।
 
 "পাতাগুলো আগের চেয়ে একটু ভারী লাগছে," রাফি বলল।
 
@@ -114,7 +114,7 @@ Cookie: user=user-1
 
 ## ৩. দ্বিতীয় ভাবনা: cookie-তে সই করে দিই
 
-আরিফ একটা ব্লগে পড়েছিল, cookie-তে সই (signature) জুড়ে দিতে হয়। ধারণাটা সহজ। server-এর কাছে একটা গোপন চাবি থাকে। cookie-র মান হয় `user-7` আর তার একটা সই (যেমন HMAC), এরকম:
+আরিফ একটা ব্লগে পড়েছিল, cookie-তে সই (signature) জুড়ে দিতে হয়। ধারণাটা সহজ। server-এর কাছে একটা গোপন চাবি থাকে। cookie-র মান হয় `user-7` আর তার একটা সই (যেমন **HMAC, Hash-based Message Authentication Code**), এরকম:
 
 ```
 user=user-7.9f2c41…
@@ -167,7 +167,7 @@ sequenceDiagram
     Staff->>B: email আর passphrase লেখে
     B->>S: POST /login (HTTPS)
     S->>S: Argon2id দিয়ে password যাচাই
-    S->>S: CSPRNG দিয়ে নতুন session ID বানায়
+    S->>S: **CSPRNG (Cryptographically Secure Pseudorandom Number Generator)** দিয়ে নতুন session ID বানায়
     S->>St: hash(session ID) → user-1, মেয়াদ
     S-->>B: 303 আর Set-Cookie: __Host-id=session ID
     B->>B: cookie jar-এ রাখে
