@@ -5,7 +5,7 @@ title: "CORS: Browser কোন Response পড়তে পারবে?"
 status: draft
 ---
 
-# CORS: Browser কোন Response পড়তে পারবে?
+# CORS (Cross-Origin Resource Sharing): Browser কোন Response পড়তে পারবে?
 
 বৃহস্পতিবার সকাল। আরিফ browser security নিয়ে একটা ছোট test scenario দেখছে। একটি পাতা চলছে `https://app.example`, আর সেটি `https://api.example`-এ থাকা API-র response পড়তে চায়। Browser-এ response এসেছে, কিন্তু JavaScript সেটি পড়তে পারছে না। Console-এ CORS error।
 
@@ -21,7 +21,7 @@ status: draft
 
 ## ১. Origin কী, আর কেন আলাদা?
 
-একটি web origin গঠিত হয় তিনটি অংশ দিয়ে:
+একটি web **origin** গঠিত হয় তিনটি অংশ দিয়ে:
 
 - Scheme, যেমন `https`
 - Host, যেমন `app.example`
