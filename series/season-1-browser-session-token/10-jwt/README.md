@@ -33,7 +33,7 @@ JWT-এর পূর্ণরূপ JSON Web Token। এটি কিছু cla
 xxxxx.yyyyy.zzzzz
 ```
 
-এখানে তিনটি অংশ dot দিয়ে আলাদা করা। এটি সাধারণত **JWS Compact Serialization**-এর গঠন:
+এখানে তিনটি অংশ dot দিয়ে আলাদা করা। এটি সাধারণত **JWS (JSON Web Signature) Compact Serialization**-এর গঠন:
 
 ```mermaid
 flowchart LR
@@ -52,13 +52,13 @@ flowchart LR
 
 - **Header:** token-এর metadata, যেমন এটি কোন ধরনের object এবং কোন signing algorithm ব্যবহার করা হয়েছে বলে দাবি করছে।
 - **Payload:** claims, অর্থাৎ token-এর ভেতরে রাখা statements।
-- **Signature / MAC:** নির্দিষ্ট key ও algorithm দিয়ে encoded header ও payload-কে যুক্ত করা signing input-এর ওপর তৈরি integrity protection। JWS-এ algorithm অনুযায়ী এটি digital signature অথবা MAC হতে পারে।
+- **Signature / MAC:** নির্দিষ্ট key ও algorithm দিয়ে encoded header ও payload-কে যুক্ত করা signing input-এর ওপর তৈরি integrity protection। এখানে **MAC (Message Authentication Code)** হলো secret key-নির্ভর integrity check; JWS-এ algorithm অনুযায়ী এটি digital signature অথবা MAC হতে পারে।
 
-Header ও payload সাধারণত Base64URL encoding করা থাকে। **Encoding encryption নয়।** যে কেউ token-এর এই অংশ decode করে পড়তে পারে। তাই password, secret, বা এমন ব্যক্তিগত তথ্য payload-এ রাখা যাবে না, যা token দেখে ফেলা কেউ জানতে পারুক তা চাই না।
+Header ও payload সাধারণত **Base64URL** encoding করা থাকে। এটি Base64-এর URL-safe রূপ, যেখানে URL-এ সমস্যার কারণ হতে পারে এমন কিছু character বদলে দেওয়া হয়। **Encoding encryption নয়।** যে কেউ token-এর এই অংশ decode করে পড়তে পারে। তাই password, secret, বা এমন ব্যক্তিগত তথ্য payload-এ রাখা যাবে না, যা token দেখে ফেলা কেউ জানতে পারুক তা চাই না।
 
 Signature/MAC-ও payload-কে গোপন করে না। এটি সঠিকভাবে যাচাই করা হলে বোঝাতে সাহায্য করে যে protected content বদলানো হয়নি এবং ব্যবহৃত key ও algorithm গ্রহণযোগ্য। Key-টি সত্যিই trusted কি না, সেটি application-এর trust policy-র বিষয়। Signature যাচাই না করে শুধু payload decode করে বিশ্বাস করা নিরাপদ নয়।
 
-> তিন অংশের উদাহরণটি signed JWS-এর পরিচিত রূপ। JWT সবসময় তিন অংশের হবে, এমন নয়। Encrypted JWT-এর জন্য JWE Compact Serialization-এ পাঁচটি অংশ থাকে। Signed আর encrypted আলাদা বৈশিষ্ট্য।
+> তিন অংশের উদাহরণটি signed JWS-এর পরিচিত রূপ। JWT সবসময় তিন অংশের হবে, এমন নয়। Encrypted JWT-এর জন্য **JWE (JSON Web Encryption) Compact Serialization**-এ পাঁচটি অংশ থাকে। Signed আর encrypted আলাদা বৈশিষ্ট্য।
 
 ## ৩. ভেতরের লেখা কি সত্যি?
 
