@@ -9,9 +9,9 @@ status: draft
 
 রাফি KenaKata-তে ঠিকভাবেই login করেছে। সে নিজের order দেখার সময় request-এ থাকা order ID বদলে আরেকটি order দেখতে পেল। Login সফল, access token বৈধ, endpoint-ও ব্যবহার করার অনুমতি তার আছে। তবু অন্য customer-এর order দেখা উচিত ছিল না।
 
-সমস্যাটি পরিচয় যাচাইয়ে নয়। **Server যাচাই করেনি, রাফির এই নির্দিষ্ট order-এ access পাওয়ার অধিকার আছে কি না।** এই ধরনের ব্যর্থতা IDOR বা API-র ভাষায় BOLA হিসেবে পরিচিত।
+সমস্যাটি পরিচয় যাচাইয়ে নয়। **Server যাচাই করেনি, রাফির এই নির্দিষ্ট order-এ access পাওয়ার অধিকার আছে কি না।** এই ধরনের ব্যর্থতা **IDOR (Insecure Direct Object Reference)** বা API-র ভাষায় **BOLA (Broken Object Level Authorization)** হিসেবে পরিচিত।
 
-পরে KenaKata এক দোকান থেকে বহু organization-কে সেবা দেওয়া SaaS-এ পরিণত হয়। এখন order নির্দিষ্ট organization-এরও অন্তর্ভুক্ত। User একটি organization-এর member হতে পারে, অন্যটির নয়। তাই authorization-এ আরও একটি প্রশ্ন যোগ হয়: এই resource কোন tenant-এর, আর এই user সেই tenant-এ কী করতে পারে?
+পরে KenaKata এক দোকান থেকে বহু organization-কে সেবা দেওয়া SaaS-এ পরিণত হয়। এখন order নির্দিষ্ট organization-এরও অন্তর্ভুক্ত। User একটি organization-এর member হতে পারে, অন্যটির নয়। তাই authorization-এ আরও একটি প্রশ্ন যোগ হয়: এই resource কোন **tenant**-এর, আর এই user সেই tenant-এ কী করতে পারে? এখানে tenant বলতে আলাদা customer বা organization-এর data ও permission boundary বোঝাচ্ছি।
 
 ## এই অধ্যায়ে কী বুঝবে
 
