@@ -7,596 +7,470 @@ status: draft
 
 # প্রথম Login System এবং Password Security
 
-বৃহস্পতিবার ভোর, ৬টা ৪০। আরিফের ফোনে একটা অচেনা মানুষের email এল।
+বৃহস্পতিবার ভোর, ৬টা ৪০। আরিফের ফোনে একটা email এল।
 
-> **বিষয়:** আপনাদের database backup ইন্টারনেটে খোলা
+> **বিষয়: আপনাদের database backup ইন্টারনেটে খোলা**
 >
-> ভাই, আমি শখে security নিয়ে ঘাঁটাঘাঁটি করি। একটা public link-এ `kenakata-backup.sql.gz` নামে একটা ফাইল পেলাম। ভেতরে "kenakata" নামটা আছে, তাই লিখছি। সময় পেলে দেখে নেবেন।
+> ভাই, একটা public link-এ `kenakata-backup.sql.gz` নামে ফাইল পেলাম। ভেতরে KenaKata নামটা আছে। তাই জানাচ্ছি।
 
-আরিফের ঘুম পুরোপুরি কাটল না, কিন্তু মনে পড়ল। তিন সপ্তাহ আগে সে একটা backup নিয়ে একজন বন্ধুকে migration দেখিয়েছিল। ফাইলটা পাঠিয়েছিল "যার কাছে লিঙ্ক আছে সে-ই দেখতে পারবে" ধরনের share link দিয়ে। লিঙ্কটা শেষ পর্যন্ত কোথায় কোথায় গেল, তার হিসাব তার কাছে নেই।
+আরিফের মনে পড়ল, তিন সপ্তাহ আগে সে একটা backup বন্ধুকে পাঠিয়েছিল migration দেখানোর জন্য। এমন share link ব্যবহার করেছিল, যেখানে link যার কাছে আছে, সে-ই ফাইল খুলতে পারে। লিংকটা এরপর কোথায় গেছে, তার হিসাব তার কাছে নেই।
 
-অধ্যায় ১-এর গোপন URL মনে আছে? "যার কাছে আছে, সে-ই সব"। সেই ভুলটাই আরেকটা চেহারায় ফিরে এসেছে।
+অধ্যায় ১-এর গোপন URL মনে আছে? "যার কাছে আছে, সে-ই সব।" একই ভুল, এবার অন্য দরজা দিয়ে।
 
-আরিফ ফাইলটা নামাল। `users` table-এ একটা query চালাল। পাঁচ সেকেন্ড পরে সে বুঝল, সমস্যা ফাইলটা বাইরে যাওয়ায় যতটা, তার চেয়ে বেশি ফাইলের ভেতরে যা ছিল তাতে।
+আরিফ ফাইলটা নামাল। `users` table খুলল। কয়েক সেকেন্ড পরেই বুঝল, backup বাইরে যাওয়াটাই একমাত্র সমস্যা নয়। ফাইলের ভেতরে কী রাখা ছিল, সেটাও বড় সমস্যা।
 
----
+এই অধ্যায়ে আমরা আরিফের সেই ভুল থেকে শুরু করব। Password কীভাবে রাখতে হয়, কেন শুধু hash বললেই কাজ শেষ হয় না, আর database ফাঁস হলে আক্রমণকারী কী করতে পারে, ধাপে ধাপে দেখব।
 
-## এই অধ্যায়ে কী বুঝবে
+## এই অধ্যায়ে কী বুঝবে
 
-- Password hash করা আর password encrypt করা এক কাজ নয়।
-- Salt, ধীর password-hashing algorithm ও rate limiting আলাদা আলাদা ঝুঁকি কমায়।
-- Database leak, online guessing এবং credential stuffing-এর threat model এক নয়।
+- Password সংরক্ষণে encryption আর hashing-এর পার্থক্য।
+- Hash, salt, Argon2id ও pepper কীভাবে আলাদা ঝুঁকি কমায়।
+- Online ও offline guessing কেন আলাদা সমস্যা।
+- Password policy, rate limiting, credential stuffing এবং MFA-র ভূমিকা।
+- Password storage-এর সীমাবদ্ধতা ও production trade-off।
 
-## ১. তিন সপ্তাহ আগে: আধ ঘণ্টার login
+## ১. আধ ঘণ্টার login
 
-অধ্যায় ১-এ আরিফ `authenticate`-এর ভেতরের কাজটা ফাঁকা রেখেছিল। অধ্যায় ২-এ আমরা ধরে নিয়েছিলাম সেটা নির্ভুল। কিন্তু কোনো একসময় password যাচাইয়ের নিয়ম ঠিক করতে হয়েছে, আর আরিফ সেটা করেছে যেভাবে ব্যস্ত মানুষ করে: সবচেয়ে সোজা পথে।
+অধ্যায় ১-এ আরিফ `authenticate`-এর ভেতরের কাজটা ফাঁকা রেখেছিল। অধ্যায় ২-এ আমরা ধরে নিয়েছিলাম, ওই কাজ ঠিকঠাক হয়। কিন্তু কোনো একসময় password যাচাইয়ের নিয়ম লিখতে হয়েছে।
 
-দুটো জিনিস দরকার ছিল। রাফি আর তার দুই কর্মীর email ও password রাখার জায়গা, আর এমন একটি যাচাই-প্রক্রিয়া, যেটা বলে দেয় "এই email-password জোড়া ঠিক কি না"।
+আরিফের দরকার ছিল দুটো জিনিস: user-এর email ও password রাখার জায়গা, আর login-এর সময় পাঠানো email-password জোড়া ঠিক কি না তা যাচাই করার ব্যবস্থা।
+
+প্রথম সংস্করণে database-এ সে password-ই রেখে দিল।
 
 | id | email | password |
 |---|---|---|
-| `user-1` | `rafi@example.com` | `[দুর্বল উদাহরণ password]` |
-| `user-4` | `shuvo@example.com` | `[দুর্বল উদাহরণ password]` |
-| `user-7` | `tuli@example.com` | `[দুর্বল উদাহরণ password]` |
+| `user-1` | `rafi@example.com` | `rafi1985` |
+| `user-4` | `shuvo@example.com` | `shuvo@123` |
+| `user-7` | `tuli@example.com` | `Tuli2024!` |
 
-(email আর password কাল্পনিক, আর ইচ্ছা করেই দুর্বল।)
+এগুলো কাল্পনিক account এবং দুর্বল password-এর উদাহরণ।
 
 ```mermaid
 flowchart TD
-    R["Login request: email + password"] --> Q["Email দিয়ে account খোঁজো"]
-    Q --> U["Database থেকে stored password আনো"]
-    U --> C{"পাঠানো password<br/>stored password-এর সমান?"}
-    C -->|"হ্যাঁ"| OK["Login সফল"]
-    C -->|"না"| NO["Login ব্যর্থ"]
-    DB["Database-এ plaintext password রাখা"] -. "Dump ফাঁস হলে" .-> A["আক্রমণকারী সব password সরাসরি পড়ে"]
+    A["Login: email + password"] --> B["Email দিয়ে account খোঁজো"]
+    B --> C["Database থেকে password পড়ো"]
+    C --> D{"দুটো password কি এক?"}
+    D -->|হ্যাঁ| E["Login সফল"]
+    D -->|না| F["Login ব্যর্থ"]
+    C -. "Database dump ফাঁস" .-> G["আক্রমণকারী password পড়ে ফেলে"]
 ```
 
-এটি একটি ধারণাগত flow: account খোঁজার সময় user-এর পাঠানো email-কে database query-তে নিরাপদ parameter হিসেবে দিতে হবে, সরাসরি query string-এর সঙ্গে জুড়ে দেওয়া যাবে না।
+এটি ধারণাগত flow। বাস্তব query-তে user-এর email parameter হিসেবে দিতে হবে, query string-এর সঙ্গে সরাসরি জুড়ে নয়।
 
-আরিফের প্রথম পরীক্ষা সফল। ঠিক password দিলে ঢোকা যায়, ভুল দিলে যায় না। আধ ঘণ্টা, কাজ শেষ। সাধারণ ব্যবহারকারীর চোখে কোনো ভুল ধরা পড়ে না।
+আরিফ পরীক্ষা করল। ঠিক password দিলে login হয়, ভুল দিলে হয় না। আধ ঘণ্টায় কাজ শেষ।
 
-এটাই এই অধ্যায়ের প্রথম শিক্ষা, আর এটা একটু অস্বস্তিকর: **সাধারণ functional test পাস করলেও password সংরক্ষণের নকশা নিরাপত্তার দিক থেকে ভাঙা হতে পারে।** Functional test জিজ্ঞেস করে "ঠিক মানুষ ঢুকছে তো?"। নিরাপত্তার প্রশ্ন আলাদা: "জিনিসটা অন্যের হাতে গেলে কী হবে?"
+কিন্তু একটা অস্বস্তিকর সত্য আছে: **functional test পাস করা আর নিরাপদ হওয়া এক কথা নয়।** Functional test জিজ্ঞেস করে, "ঠিক মানুষ ঢুকতে পারছে তো?" Security জিজ্ঞেস করে, "এই তথ্য অন্যের হাতে গেলে কী হবে?"
 
----
+## ২. Backup খুলে কী দেখা গেল
 
-## ২. ফাঁস: dump খুললে আরিফ কী দেখল
+আরিফের database-এ password column-টি এমন ছিল:
 
 ```text
-Database থেকে পাওয়া তথ্যের ধারণাগত উদাহরণ:
-
-users table
-- id
-- email
-- password  ← এখানে plaintext password রাখা হয়েছিল
-
-আক্রমণকারী table-এর এই column-টিও পড়তে পারে, যদি dump-টি তার হাতে যায়।
+id      | email              | password
+--------+--------------------+-----------
+user-1  | rafi@example.com   | rafi1985
+user-4  | shuvo@example.com  | shuvo@123
+user-7  | tuli@example.com   | Tuli2024!
 ```
 
-```
- id     | email             | password
---------+-------------------+-----------
- user-1 | rafi@example.com  | rafi1985
- user-4 | shuvo@example.com | shuvo@123
- user-7 | tuli@example.com  | Tuli2024!
-```
+আক্রমণকারীকে কোনো password ভাঙতে হয়নি। ফাইল পড়লেই সব পাওয়া গেল।
 
-আক্রমণকারীকে কিছু ভাঙতে হয়নি। তার দরকার ছিল শুধু ফাইলটা পড়া।
+ক্ষতিটা শুধু তিনটি account-এ সীমাবদ্ধ নয়।
 
-আরিফ ক্ষতিটা গুনতে বসল। চারটা আলাদা ক্ষতি, আর প্রতিটা আলাদা ধরনের।
+**প্রথম ক্ষতি: account takeover।** আক্রমণকারী রাফির password জানে। সে রাফি সেজে login করতে পারে। অধ্যায় ২-এর `can(user-1, RefundOrder)` তখনও `true` দেবে, কারণ authorization system-এর চোখে request-টি রাফির। Authorization ভুল পরিচয়কে ঠিক করে দিতে পারে না।
 
-**এক: তিনটা account এক মুহূর্তে দখল।** আর অধ্যায় ২-এর শেষ প্রশ্নের উত্তরও এখানেই: "যে password দিয়ে 'আমিই সে' প্রমাণ হয়, সেটা আক্রমণকারীর হাতে গেলে `can`-এর সবচেয়ে নিখুঁত নিয়ম কাকে ঠেকাবে?" উত্তর: **কাউকে না।** `can(user-1, RefundOrder)` সত্যিই `true` দেবে, কারণ রাফির সেই অনুমতি আছে, আর আক্রমণকারী এখন রাফি। Authorization পরিচয়কে বিশ্বাস করে। পরিচয়ের credential চুরি হলে সেই বিশ্বাসই আক্রমণের রাস্তা।
+**দ্বিতীয় ক্ষতি: password reuse।** মানুষ অনেক account চালায়। মনে রাখার সুবিধার জন্য একই password বা তার সামান্য বদলানো রূপ বিভিন্ন জায়গায় ব্যবহার করে। KenaKata-র backup থেকে পাওয়া password অন্য account-ও খুলে দিতে পারে। Email account দখল হলে password reset-এর পথ ধরেও আরও account হারাতে পারে।
 
-**দুই: ক্ষতি KenaKata-র বাইরেও যায়।** মানুষ গড়ে অনেকগুলো account চালায়, আর মনে রাখার সীমা আছে। তাই একই password বা তার সামান্য বদলানো রূপ বারবার ফিরে আসে। `shuvo@123` যদি শুভর email-এও থাকে, তাহলে KenaKata-র ফাঁস তার email দখলের চাবি। আর email দখল মানে "password ভুলে গেছি" লিঙ্ক দিয়ে আরও অনেক দরজা খোলা। অধ্যায় ১-এ আমরা বলেছিলাম recovery একটা নতুন দরজা। এখানে সেই দরজার সামনে চাবি পড়ে আছে।
+**তৃতীয় ক্ষতি: ভেতরের লোকের অপ্রয়োজনীয় ক্ষমতা।** Database administrator, backup পাওয়া freelancer, কিংবা log বা screenshot দেখা কর্মী, সবাই password পড়তে পারে। তাদের সবাই খারাপ মানুষ এমন নয়। কিন্তু system তাদের এমন ক্ষমতা দিয়েছে, যার দরকারই নেই। যে system পুরোনো password দেখাতে পারে, তার নকশায় সমস্যা আছে।
 
-**তিন: আরিফ নিজেও password পড়তে পারে।** আর পারে এমন সবাই: database administrator, যে freelancer backup পেয়েছে, যে কর্মী log বা screenshot ঘেঁটেছে। কেউ খারাপ কিছু না করলেও ক্ষমতাটা থেকে যায়। যে system user-এর password "দেখিয়ে দিতে" পারে, তার ভেতরে সবসময় ভুল একটা নকশা লুকিয়ে আছে। এই লক্ষণটা মনে রেখো, পরে কাজে লাগবে।
+**চতুর্থ ক্ষতি: log-ও বিভ্রান্তিকর হয়ে যায়।** আক্রমণকারী যদি `user-4` সেজে কাজ করে, log-এ `by=user-4`-ই লেখা হবে। Log ঠিকভাবে কাজ করবে, কিন্তু ঘটনাটির প্রকৃত মানুষটিকে চিনতে পারবে না।
 
-**চার: accountability আবার ভাঙল।** অধ্যায় ১-এ আমরা log-এ `by=user-4` বসিয়ে "কে করল?" প্রশ্নের উত্তর পেয়েছিলাম। কিন্তু আক্রমণকারী `user-4`-এর পরিচয়ে ঢুকলে log-এ সেই একই `by=user-4` লেখা হবে। Log ঠিকঠাক কাজ করবে, আর মিথ্যে বলবে।
+আরেকটি কথা: database-এ customer-এর নাম, ফোন ও ঠিকানাও ছিল। Password ঠিকভাবে রাখলেই ওই তথ্যগুলো সুরক্ষিত হয় না। সেগুলোর জন্য আলাদা access control ও data-protection ব্যবস্থা দরকার।
 
-আরও একটা জিনিস আরিফ লক্ষ করল, যদিও সেটা এই অধ্যায়ের বিষয় নয়। Dump-এ শুধু password নেই। ক্রেতাদের নাম, ফোন নম্বর, ঠিকানাও আছে। Password ঠিকমতো রাখলে এগুলো সুরক্ষিত হয় না। এটা পরের তালিকায় (§১২) ফিরে আসবে।
+## ৩. আক্রমণকারী এখন কোথায়?
 
-### এখন আক্রমণকারী কোথায়?
+আরিফ এতদিন আক্রমণকারীকে কল্পনা করেছে server-এর সামনে দাঁড়ানো কেউ হিসেবে। সে `/login`-এ request পাঠায়। Server সেই request দেখতে পায়, গুনতে পারে, ধীর করতে পারে, এমনকি আটকে দিতে পারে।
 
-এই ঘটনা একটা মৌলিক জিনিস বদলে দেয়। এতদিন আমরা আক্রমণকারীকে ভেবেছি **আমাদের server-এর সামনে** দাঁড়ানো কেউ হিসেবে। সে `/login`-এ অনুরোধ পাঠায়, আর আমরা সেখানে নিয়ম বসাতে পারি: কতবার ভুল করা যাবে, কত দ্রুত, কোন IP থেকে। এটাকে বলে **online** আক্রমণ।
+এখন backup-টিও আক্রমণকারীর হাতে। সে নিজের computer-এ বসে কাজ করতে পারে। KenaKata-র server-এ আর request পাঠানোর দরকার নেই।
 
-কিন্তু dump হাতে এলে আক্রমণকারী আমাদের server-এর **বাইরে**। সে নিজের machine-এ, নিজের সময়ে, যত খুশি অনুমান করতে পারে। কেউ তার গতি বাঁধবে না, কোনো log তৈরি হবে না, আমরা জানতেও পারব না। এটা **offline** আক্রমণ।
+এই দুই অবস্থার নাম **online attack** এবং **offline attack**।
 
-এই পার্থক্য ছবিতে দেখা যাক। প্রশ্নটা হলো: আমাদের কোন নিয়ন্ত্রণ কোন আক্রমণে কাজ করে?
+- **Online attack:** আক্রমণকারী আমাদের login endpoint দিয়ে password অনুমান করে। প্রতিটি চেষ্টা server-এর মধ্য দিয়ে যায়। তাই rate limit, monitoring বা CAPTCHA-র মতো নিয়ন্ত্রণ কাজে আসতে পারে।
+- **Offline attack:** আক্রমণকারী database-এর কপি পেয়ে নিজের computer-এ password অনুমান করে। সে নিজের গতিতে চেষ্টা চালায়। আমাদের login endpoint, rate limit বা server log তার সেই চেষ্টাগুলো দেখতে পায় না।
 
-```mermaid
-flowchart LR
-    subgraph Online["Online: আমাদের server-এর মধ্য দিয়ে"]
-        A1["আক্রমণকারী"] -->|"email + অনুমান"| L["POST /login"]
-        L --> C{"Rate limit / throttling / monitoring"}
-        C -->|"অনুমোদিত"| V["Password hash যাচাই"]
-        C -->|"সীমা পার"| B["অনুরোধ ধীর বা আটকে দিই"]
-        V --> M["প্রয়োজনে অতিরিক্ত factor (MFA)"]
-        M --> ACCESS["প্রবেশের সিদ্ধান্ত"]
-    end
-    subgraph Offline["Offline: dump আক্রমণকারীর নিজের machine-এ"]
-        A2["আক্রমণকারী"] --> GUESS["অনুমান → hash → মিলিয়ে দেখা"]
-        GUESS -->|"মেলেনি"| GUESS
-        GUESS -->|"মিলল"| W["password অনুমান মিলে গেল"]
-    end
-```
+একটা দোকানের কথা ভাবো। Online attack-এ কেউ দোকানের সামনের দরজায় দাঁড়িয়ে একের পর এক চাবি লাগিয়ে দেখছে। দোকানদার তাকে দেখতে পাচ্ছে, চেষ্টার সংখ্যা গুনতে পারছে। Offline attack-এ কেউ তালার যাচাই করার তথ্যের একটা কপি বাড়িতে নিয়ে গেছে। এখন সে দোকানের বাইরে বসে নিজের মতো পরীক্ষা করছে।
 
-ডানদিকের বাক্সে server-side rate limit, CAPTCHA বা login monitoring আক্রমণকারীর অনুমানগুলোকে নিয়ন্ত্রণ করতে পারে না, কারণ সেগুলো server-এর বাইরে চলছে। MFA hash cracking-এর খরচ বাড়ায় না, তবে চুরি হওয়া বা অনুমান করা password দিয়ে account-এ ঢোকা কঠিন করতে পারে। Offline আক্রমণের বিরুদ্ধে দুটি গুরুত্বপূর্ণ বিষয় হলো password অনুমান করা কতটা কঠিন, এবং প্রতিটি অনুমান করতে কত খরচ হয়।
+এখনও আমরা password hash কী, তা জানি না। আপাতত শুধু পার্থক্যটা মনে রাখো: **online আক্রমণ আমাদের server-এর নিয়ন্ত্রণের মধ্যে দিয়ে যায়; offline আক্রমণ যায় না।**
 
----
+## ৪. Server-এর কি password মনে রাখা দরকার?
 
-## 💡 ৩. ভুল প্রশ্ন: "password কীভাবে লুকাব?"
+আরিফের প্রথম প্রস্তাব ছিল, "তাহলে password encrypt করে রাখি।"
 
-আরিফের প্রথম প্রতিক্রিয়া ছিল স্বাভাবিক: "ঠিক আছে, password-গুলো encrypt করে রাখি।"
+শুনতে ভালো। Encryption-এ একটা গোপন key দিয়ে তথ্যকে এমন রূপে বদলানো হয়, যা key ছাড়া পড়া যায় না। পরে একই key বা সংশ্লিষ্ট key দিয়ে আগের তথ্য ফিরিয়ে আনা যায়।
 
-শুনতে ঠিক লাগে। কিন্তু একটু থামো। Encryption মানে দুমুখী পথ: চাবি দিয়ে তালা দেওয়া যায়, চাবি দিয়ে খোলাও যায়। Login-এর সময় server-কে আসল password মেলাতে হলে চাবিটা তার হাতের কাছেই থাকতে হয়: environment variable, config ফাইল, বা secret manager। Dump-এর সঙ্গে চাবি আসে না, সেটা ঠিক। কিন্তু যে আক্রমণ database পর্যন্ত পৌঁছায়, সে প্রায়ই application server-ও ছোঁয়। পুরোনো backup-এর সঙ্গে config থেকে যায়, ভুলে commit হওয়া `.env` থেকে যায়। চাবি একবার হাতে এলে সব password একসঙ্গে খোলে।
+কিন্তু একটু ভেবে দেখো। Login-এর সময় server-এর আসল password ফিরিয়ে আনার দরকার কী? User password পাঠালে server-এর শুধু জানতে হবে, "এটা কি সেই password, যেটা user আগে ঠিক করেছিল?"
 
-তবে আসল সমস্যা এর আরও গভীরে, আর সেটা প্রশ্নের গোড়ায়। আরিফ জিজ্ঞেস করছিল "password কীভাবে লুকাব?"। ঠিক প্রশ্নটা হলো: **server-কে কি আসলেই password জানতে হয়?**
+Server-কে password **মনে রাখতে হয় না**। তাকে শুধু password **যাচাই করতে হয়**।
 
-না। Server-এর কাজ password **মনে রাখা** নয়। কাজ হলো কেউ password দিলে বলা, "এটা সেই password-ই কি না।" মনে রাখা আর চেনার মধ্যে পার্থক্যটা সূক্ষ্ম, কিন্তু পুরো নকশা এর ওপর দাঁড়িয়ে। Encryption এমন কিছু করে যা আমাদের দরকারই নেই: আসল password ফিরিয়ে আনার ক্ষমতা। OWASP-ও বলে, password-এর ক্ষেত্রে encryption দরকার হয় শুধু বিরল পরিস্থিতিতে, যেমন অন্য কোনো system-এ ওই password দিয়েই ঢুকতে হলে।
+Encryption ব্যবহার করলে password ফেরত পাওয়ার ক্ষমতা কোথাও না কোথাও রাখতে হবে। সেই key application-এর configuration, secret store বা অন্য কোথাও থাকবে। Database dump-এর সঙ্গে key নাও যেতে পারে, কিন্তু application server বা backup-এ key ফাঁস হলে বিপদ আবার ফিরে আসে।
 
-আগের অংশের সেই লক্ষণটা মনে করো: যে system password "দেখিয়ে দিতে" পারে, সে ভুল জিনিস রাখছে। সঠিক নকশায় রাফি password ভুলে গেলে আরিফও বলতে পারবে না সেটা কী ছিল। তখন নতুন একটা বানাতে হবে। প্রথমে এটা অসুবিধা মনে হয়। আসলে এটাই প্রমাণ যে ব্যবস্থাটা ঠিক জায়গায় আছে।
+তাই password-এর জন্য সাধারণ নকশা হলো: আসল password সংরক্ষণ না করে তার একটি যাচাইযোগ্য ছাপ রাখা।
 
-### Hash: একমুখী পথ
+এই ছাপ তৈরির পদ্ধতির নাম **hashing**।
 
-**Hash function** যেকোনো input নিয়ে একটা নির্দিষ্ট দৈর্ঘ্যের ফল দেয়। দুটো গুণ আমাদের কাজে লাগে:
+## ৫. Hash: password-এর একমুখী ছাপ
 
-- একই input সবসময় একই ফল দেয়। তাই পরে তুলনা করা যায়।
-- ফল থেকে input ফিরিয়ে আনার সোজা কোনো পথ নেই।
+একটি hash function input নেয় এবং নির্দিষ্ট দৈর্ঘ্যের output তৈরি করে। একই input দিলে একই output পাওয়া যায়। Output দেখে আসল input বের করার কোনো সহজ, সরাসরি পথ নেই।
 
-তাহলে আমরা password রাখব না। রাখব তার hash। Login-এর সময় user যা দিল, তার hash বের করে stored hash-এর সঙ্গে মেলাব। Server কখনো আসল password রাখেনি, শুধু তার ছাপ।
-
-আরিফ SHA-256 বেছে নিল। এটা পরিচিত cryptographic hash, কিন্তু password সংরক্ষণের জন্য খুব দ্রুত। Flowchart-এ দেখা যাক, এই দ্রুততার কারণে কী সমস্যা হয়:
+ধরা যাক, password হলো `rafi1985`। Server সেটির hash তৈরি করে database-এ রাখল। পরের বার রাফি login করলে server তার পাঠানো password-এর hash বের করে stored hash-এর সঙ্গে যাচাই করবে।
 
 ```mermaid
 flowchart TD
-    P["User-এর password"] --> H["দ্রুত SHA-256 hash"]
-    H --> S["একই password হলে একই hash"]
-    S --> D["Database dump"]
-    D --> A["আক্রমণকারী অনেক সম্ভাব্য password নিজে hash করে মিলিয়ে দেখে"]
-    A --> W["দুর্বল password দ্রুত পাওয়া যেতে পারে"]
+    A["User password"] --> B["Hash function"]
+    B --> C["Stored hash"]
+    D["Login-এ পাঠানো password"] --> E["একই পদ্ধতিতে hash"]
+    E --> F{"Stored hash-এর সঙ্গে মেলে?"}
+    C --> F
+    F -->|হ্যাঁ| G["Login সফল"]
+    F -->|না| H["Login ব্যর্থ"]
 ```
 
-আগের চেয়ে ভালো। এখন dump খুলে `rafi1985` পড়া যায় না। কিন্তু এই নকশারও তিনটা ফাটল আছে, আর তিনটাই আক্রমণকারীর অনুমান করার ধরন থেকে আসে।
+এবার database ফাঁস হলেও আক্রমণকারী সরাসরি `rafi1985` পড়তে পারবে না। কিন্তু এখানেই গল্প শেষ নয়।
 
-**ফাটল ১: একই password, একই hash।** `shuvo@123` আর অন্য কারও `shuvo@123` হুবহু একই hash পাবে। Dump-এ দুটো hash পাশাপাশি এক দেখালে আক্রমণকারী বোঝে ওদের password এক। আর একটা ভাঙলে দুটোই ভাঙল।
+আরিফ SHA-256 ব্যবহার করার কথা ভাবল। এটি পরিচিত cryptographic hash function। File integrity যাচাইয়ের মতো কাজে খুব উপযোগী। কিন্তু password সংরক্ষণের জন্য এটি উপযুক্ত নয়।
 
-**ফাটল ২: আগেভাগে হিসাব করে রাখা যায়।** Hash একমুখী হলেও আক্রমণকারী উল্টো দিক থেকে কাজ করতে পারে: লক্ষ লক্ষ পরিচিত password আগেই hash করে একটা বিশাল তালিকা বানিয়ে রাখে। তারপর dump এলে শুধু খুঁজে নেয়, hash করার সময়ও লাগে না। (এই ধরনের তালিকার পরিচিত নাম rainbow table।)
+কেন?
 
-**ফাটল ৩: SHA-256 জন্মেছে দ্রুত হওয়ার জন্য।** এটা ফাইলের অখণ্ডতা যাচাই আর digital signature-এর মতো কাজে উপযোগী, যেখানে গতি গুণ। কিন্তু password guessing-এর ক্ষেত্রেও এই গতি আক্রমণকারীর সুবিধা: সাধারণ hardware-এ দ্রুত hash দিয়ে বিপুল সংখ্যক অনুমান যাচাই করা যায়। নির্দিষ্ট machine-এর benchmark বদলাবে, কিন্তু নকশাগত সমস্যা বদলায় না। আক্রমণকারী GPU বা ভাড়া করা cloud machine ব্যবহার করে, আর OWASP নিজেই বলে, GPU আর ভাড়া-করা cloud machine দিয়ে password ভাঙার খরচ আক্রমণকারীর জন্য তুলনামূলকভাবে কম, বিশেষ করে hashing-এর ভালো চর্চা না মানা হলে।
+একটি সাধারণ hash function দ্রুত হওয়ার জন্য তৈরি। দ্রুত হওয়া বেশিরভাগ কাজে ভালো গুণ। Password attack-এ সেটাই সমস্যা। Database dump হাতে পেলে আক্রমণকারী সম্ভাব্য password নিজে hash করে stored hash-এর সঙ্গে মিলিয়ে দেখতে পারে। SHA-256 এত দ্রুত যে বিপুল সংখ্যক অনুমান চালানো সম্ভব।
 
-এখানে যুক্তিটা উল্টে যায়। সাধারণত "দ্রুত" মানে ভালো। Password hash-এর ক্ষেত্রে দ্রুত হওয়াই আক্রমণকারীর সবচেয়ে বড় সুবিধা।
+আরও দুটি সমস্যা আছে।
 
+**একই password, একই hash।** দুই user একই password ব্যবহার করলে তাদের hash-ও এক হবে। আক্রমণকারী বুঝতে পারে কোন account-গুলো একই password ব্যবহার করছে।
 
-## 🧠 Decision Game: database dump ফাঁস হলে কোন control কাজে দেবে?
+**আগে থেকে হিসাব করে রাখা যায়।** পরিচিত password-গুলোর hash আগে থেকেই হিসাব করে বিশাল তালিকা বানানো যায়। পরে database dump পেলে সেই তালিকার সঙ্গে মিলিয়ে দেখা যায়। এ ধরনের precomputed তালিকার একটি পরিচিত নাম rainbow table।
 
-আরিফের কাছে এখন তিনটি প্রস্তাব এসেছে। Database backup আবার ফাঁস হয়েছে, আর আক্রমণকারীর হাতে password hash আছে। কোন control সরাসরি offline password guessing-এর খরচ বাড়াবে?
+Hash একমুখী হওয়া মানে password guess করা অসম্ভব নয়। আক্রমণকারী আসল hash উল্টো করে না; সে সম্ভাব্য password সামনে থেকে পরীক্ষা করে।
 
-- **A.** `/login`-এ প্রতি IP-তে rate limit বসানো
-- **B.** প্রতিটি password-এর জন্য random salt এবং Argon2id ব্যবহার
-- **C.** Login ব্যর্থ হলে CAPTCHA দেখানো
+## ৬. Salt: একই password হলেও আলাদা ছাপ
 
-নিজে উত্তর বেছে নাও। এখানে প্রশ্নটা কোন control ভালো, তা নয়; প্রশ্নটা হলো আক্রমণকারী এখন server-এর বাইরে থাকলে কোন control তার কাছে পৌঁছাতে পারবে।
+একই password-এর hash যেন প্রতিটি account-এ আলাদা হয়, তার জন্য প্রতিটি password-এর সঙ্গে একটি আলাদা random মান যোগ করা হয়। এর নাম **salt**।
+
+ধরা যাক, রাফি ও শুভ একই password ব্যবহার করে। Salt ছাড়া তাদের hash একই হতে পারে। কিন্তু প্রত্যেকের salt আলাদা হলে hash-ও আলাদা হবে।
+
+```mermaid
+flowchart TD
+    A["রাফির password"] --> C["Password + রাফির random salt"]
+    B["শুভর একই password"] --> D["Password + শুভর random salt"]
+    C --> E["Hash A"]
+    D --> F["Hash B"]
+    E --> G["দুটি hash আলাদা"]
+    F --> G
+```
+
+Salt-এর কাজ দুটি:
+
+1. একই password ব্যবহার করা account-গুলোর hash আলাদা করা।
+2. আগে থেকে তৈরি rainbow table-কে কার্যত অকার্যকর করা। প্রতিটি salt-এর জন্য নতুন করে হিসাব করতে হবে।
+
+একটি গুরুত্বপূর্ণ কথা: **salt গোপন নয়।** এটি hash-এর পাশেই database-এ রাখা হয়। আক্রমণকারী dump পেলে salt-ও পাবে। Salt কোনো password-কে নিজে থেকে শক্তিশালী করে না, আর প্রতিটি guess-কে ধীরও করে না। এটি শুধু একই password ও precomputed table-সংক্রান্ত সুবিধা কমায়।
+
+প্রতিটি password-এর জন্য আলাদা, cryptographically secure random salt দরকার। ভালো password-hashing library সাধারণত salt তৈরি ও সংরক্ষণের কাজ নিজেই করে। নিজের হাতে salt বানানোর দরকার নেই।
+
+## ৭. Password guess করাটাই ব্যয়বহুল করতে হবে
+
+Salt একই password-এর hash আলাদা করে। কিন্তু আক্রমণকারী যদি একটি নির্দিষ্ট account-কে লক্ষ্য করে, তার salt জেনেই password guess করতে পারে। প্রতিটি অনুমান এখনও দ্রুত হলে দুর্বল password দ্রুত বেরিয়ে আসতে পারে।
+
+তাই password storage-এর জন্য এমন algorithm দরকার, যা প্রতিটি guess-কে ইচ্ছা করে ব্যয়বহুল করে।
+
+এখানেই **Argon2id** আসে। এটি password hashing-এর জন্য তৈরি algorithm। এটি সময়ের পাশাপাশি memory-ও ব্যবহার করে। ফলে অনেকগুলো guess একসঙ্গে চালানো আক্রমণকারীর জন্য ব্যয়বহুল হয়।
+
+আরও কিছু নাম দেখা যেতে পারে:
+
+- **scrypt:** memory-hard password hashing algorithm।
+- **PBKDF2:** বহুদিনের ব্যবহৃত password-based key derivation function; নির্দিষ্ট compliance requirement-এ দেখা যায়।
+- **bcrypt:** পুরোনো system-এ প্রচলিত। নতুন system-এ ব্যবহারের আগে এর input-length সীমাবদ্ধতা ও বর্তমান সুপারিশ বুঝতে হবে।
+
+সাধারণ-purpose hash যেমন SHA-256 দ্রুত কাজ করার জন্য তৈরি। Password storage-এর জন্য উপযুক্ত password-hashing algorithm ব্যবহার করতে হবে। নতুন system-এ Argon2id সাধারণত ভালো default পছন্দ।
+
+### কতটা ধীর হওয়া উচিত?
+
+Hash যত ব্যয়বহুল হবে, আক্রমণকারীর প্রতিটি guess তত ব্যয়বহুল হবে। কিন্তু বৈধ user-এর login-ও তত বেশি CPU ও memory ব্যবহার করবে।
+
+অতিরিক্ত কম cost আক্রমণকারীকে সুবিধা দেয়। অতিরিক্ত বেশি cost server-কে ধীর করে দিতে পারে, এমনকি login endpoint-কে denial-of-service-এর লক্ষ্য বানাতে পারে।
+
+তাই production system-এ নিজের hardware ও concurrent login load মেপে configuration বেছে নিতে হয়। কোনো একটি parameter সব application-এর জন্য সঠিক নয়। রক্ষণাবেক্ষণাধীন library-এর বর্তমান recommendation দিয়ে শুরু করতে হবে, তারপর নিজের workload-এ পরীক্ষা করতে হবে।
+
+### Database-এ ঠিক কী রাখব?
+
+শুধু hash রাখলেই হবে না। পরের login-এ যাচাই করার জন্য algorithm, তার configuration এবং salt-ও দরকার। সাধারণত এগুলো encoded password-hash record-এ একসঙ্গে থাকে।
+
+```text
+password_hash:
+  algorithm
+  parameters
+  salt
+  derived hash
+```
+
+এই record-টি database থেকে এলেও অন্ধভাবে বিশ্বাস করা যাবে না। Algorithm ও parameter অবশ্যই application-এর অনুমোদিত সীমার মধ্যে থাকতে হবে। অজানা algorithm বা অস্বাভাবিক resource setting পেলে login ব্যর্থ করতে হবে। নইলে database-এ record বদলে দিয়ে কেউ login verification-কে অতিরিক্ত ব্যয়বহুল করাতে পারে।
+
+## ৮. Pepper: আরেকটি গোপন উপাদান
+
+Salt সবার জন্য আলাদা এবং গোপন নয়। **Pepper** তার উল্টো: এটি একটি secret, সাধারণত সব password-এর জন্য একই, এবং database-এর বাইরে রাখা হয়।
+
+Database dump একা পেলে আক্রমণকারী pepper পাবে না। ফলে hash যাচাইয়ের কাজে অতিরিক্ত একটি বাধা তৈরি হয়।
+
+কিন্তু pepper salt-এর বিকল্প নয়। এটি defense in depth-এর একটি অতিরিক্ত স্তর। Pepper আলাদা secret manager বা hardware-backed store-এ রাখতে হয়। Pepper ফাঁস হলে সেটি বদলানোর পরিকল্পনাও দরকার। পুরোনো password হাতে না থাকলে নতুন pepper দিয়ে পুরোনো hash পুনরায় তৈরি করা যায় না, তাই rotation জটিল হতে পারে।
+
+এই অধ্যায়ের KenaKata উদাহরণে আমরা pepper ব্যবহার করছি না। Salt ও সঠিক password-hashing algorithm-ই মূল ভিত্তি।
+
+## ৯. এবার পরীক্ষা: কোন নিয়ন্ত্রণ কোথায় কাজ করে?
+
+এখন পর্যন্ত আমরা জেনেছি hash, salt এবং ধীর password hashing কী করে। এবার সিদ্ধান্ত নেওয়া সহজ।
+
+**Decision Game**
+
+KenaKata-র database dump আক্রমণকারীর হাতে গেছে। সে নিজের computer-এ password অনুমান করছে। কোন ব্যবস্থা offline guessing-এর খরচ বাড়ায়?
+
+- A. `/login` endpoint-এ প্রতি IP-তে rate limit
+- B. প্রতিটি password-এর জন্য random salt এবং Argon2id
+- C. Login page-এ CAPTCHA
+- D. ভুল password হলে account সাময়িক lock করা
 
 <details>
 <summary>উত্তর ও ব্যাখ্যা দেখো</summary>
 
-**সঠিক উত্তর: B।** Database dump হাতে থাকলে আক্রমণকারী নিজের machine-এ password অনুমান করে hash মিলিয়ে দেখতে পারে। `/login`-এর rate limit আর CAPTCHA server-এ আসা request নিয়ন্ত্রণ করে, তাই offline guessing থামায় না। Random salt precomputed তালিকা ও একাধিক account-এ একই hash-এর সুবিধা কমায়; Argon2id প্রতিটি অনুমানকে সময় ও memory-র দিক থেকে ব্যয়বহুল করে।
+**সঠিক উত্তর: B।** Salt একই password-এর hash আলাদা করে এবং precomputed table-এর সুবিধা কমায়। Argon2id প্রতিটি guess-কে সময় ও memory-র দিক থেকে ব্যয়বহুল করে।
 
-**Edge case:** Argon2id দুর্বল password-কে শক্ত করে দেয় না। `rafi1985`-এর মতো সহজ password তবু অনুমান করা যেতে পারে, শুধু প্রতি অনুমানের খরচ বাড়ে। তাই password length, blocklist এবং online attack-এর বিরুদ্ধে আলাদা control-ও দরকার।
+A, C ও D login endpoint দিয়ে আসা online request নিয়ন্ত্রণ করতে পারে। কিন্তু আক্রমণকারী নিজের computer-এ dump নিয়ে কাজ করলে ওই নিয়ন্ত্রণগুলো তার সামনে থাকে না।
+
+**Edge case:** Argon2id দুর্বল password-কে শক্তিশালী করে দেয় না। `rafi1985`-এর মতো সহজ password এখনও guess করা সম্ভব, শুধু প্রতিটি চেষ্টার খরচ বাড়ে।
 
 </details>
----
 
-## ৪. Salt: প্রতিটা password আলাদা করে ছোঁয়া
+## ১০. Password কতটা শক্ত হওয়া দরকার?
 
-প্রথম দুটো ফাটল একটা সহজ ধারণায় বন্ধ হয়। প্রতিটা user-এর জন্য একটা আলাদা, random মান বানাও, যার নাম **salt**। Password-এর সঙ্গে salt মিশিয়ে hash করো। Salt-টা hash-এর পাশেই রেখে দাও।
+ধীর hash আক্রমণকারীর সময় ও খরচ বাড়ায়। কিন্তু password যদি খুব সহজ হয়, সেই বাড়তি খরচও যথেষ্ট নাও হতে পারে।
 
-ফল:
+আরিফ প্রথমে একটা নিয়ম লিখতে চেয়েছিল: বড় হাতের অক্ষর থাকতে হবে, ছোট হাতের অক্ষর থাকতে হবে, সংখ্যা থাকতে হবে, special character থাকতে হবে। শুনতে কঠোর, কিন্তু মানুষ এমন নিয়মে প্রায়ই predictable password বানায়: `Password1!`, `Summer2026!`।
 
-- দুজনের password এক হলেও salt আলাদা, তাই hash আলাদা। Dump দেখে কে কার সঙ্গে password ভাগ করছে, বোঝা যায় না।
-- আগে থেকে তৈরি hash table বা rainbow table পুনর্ব্যবহার করা অনেক কম কার্যকর হয়ে যায়। প্রতিটি salt-এর জন্য আলাদা হিসাব করতে হয়।
-- আক্রমণকারীকে প্রতিটা hash আলাদা আলাদা করে ভাঙতে হয়। OWASP-র ভাষায়, hash যত বেশি, সময় তার সমানুপাতে বাড়ে।
+NIST-এর বর্তমান Digital Identity Guidelines এই ধরনের বাধ্যতামূলক composition rule চাপাতে বলে না। তার বদলে কয়েকটি বিষয়ে জোর দেয়:
 
-এখানে একটা বিষয় অনেকে ভুল বোঝে। **Salt গোপন নয়।** NIST-এর নির্দেশনা বলছে salt আর hash দুটোই একসঙ্গে সংরক্ষণ করতে হবে। আক্রমণকারী dump থেকে salt পায়, এবং সেটাই প্রত্যাশিত। Salt-এর কাজ গোপনীয়তা নয়। কাজ হলো আক্রমণকারীর পরিশ্রম প্রতিটা account-এর জন্য আলাদা করে দেওয়া। অধ্যায় ১-এর Kerckhoffs-এর নীতি এখানেও খাটে: পদ্ধতি জানা থাকলেও system টিকে থাকবে, যদি আসল সুরক্ষা অন্য জায়গায় থাকে।
+- Password যথেষ্ট লম্বা হতে দিতে হবে।
+- পরিচিত, ফাঁস হওয়া বা সহজে অনুমানযোগ্য password blocklist দিয়ে আটকাতে হবে।
+- Password manager ব্যবহার ও paste করার সুযোগ দিতে হবে।
+- শুধু সময় পেরিয়েছে বলে সবাইকে নিয়মিত password বদলাতে বাধ্য করা উচিত নয়। Compromise-এর প্রমাণ পেলে বদলাতে হবে।
+- Unicode password গ্রহণ করলে একইভাবে সংরক্ষণ ও যাচাই করতে হবে।
 
-ধারণাটা নতুনও নয়। Unix-এর password file-এ ১৯৭০-এর দশকেই salt ছিল (Robert Morris আর Ken Thompson-এর ১৯৭৯-এর লেখা এ নিয়ে একটা ঐতিহাসিক দলিল)। আমরা একটা পুরোনো শিক্ষা আবার শিখছি, নতুন কিছু আবিষ্কার করছি না।
+### Password length এবং passphrase
 
-প্রতিটি password-এর জন্য আলাদা random salt ব্যবহার করতে হবে। বিশ্বস্ত password-hashing library সাধারণত salt তৈরি ও সংরক্ষণের কাজ নিজেই সামলায়। পাঠকের জন্য মূল ধারণা: salt unique হওয়া দরকার, গোপন হওয়া নয়।
+`rafi1985` ছোট এবং অনুমানযোগ্য। তার বদলে একাধিক শব্দের দীর্ঘ passphrase মনে রাখা সহজ হতে পারে, আর অনুমান করাও কঠিন হতে পারে। তবে শুধু শব্দ বেশি হলেই নিশ্চয়তা নেই; পরিচিত বাক্য, নাম বা উদ্ধৃতি আক্রমণকারীর তালিকায় থাকতে পারে।
 
-**Salt কী ঠিক করে না:** একটা নির্দিষ্ট password-এর অনুমান করার খরচ। আক্রমণকারী যদি বিশেষ করে `user-1`-কে লক্ষ্য করে, তার জন্য ওই account-এর salt নিয়েই অনুমান চালাতে পারে। Salt একা প্রতিটি অনুমানকে ধীর করে না; সেই কাজ password-hashing algorithm করে। ফাটল ৩ খোলা।
+Password manager ব্যবহারকারীকে প্রতিটি site-এর জন্য আলাদা random password রাখতে সাহায্য করে। এতে একটি site ফাঁস হলে অন্য site-এ একই password দিয়ে ঢোকার ঝুঁকি কমে।
 
----
+### Unicode এবং বাংলা password
 
-## ৫. ধীর হওয়াটাই নকশা
+Password শুধু ইংরেজি অক্ষর, সংখ্যা আর punctuation নয়। User বাংলা বা অন্য Unicode character ব্যবহার করতে পারে।
 
-ফাটল ৩ বন্ধ করতে হলে password hashing-কে **ইচ্ছা করে ব্যয়বহুল** করতে হবে। সাধারণ hash দ্রুত হওয়াটাই তার কাজ; password storage-এর জন্য আমাদের এমন পদ্ধতি দরকার, যাতে প্রতিটি অনুমান করতে সময় ও memory দুটোই খরচ হয়।
+একই দেখতে কিছু Unicode text ভিন্ন code point sequence দিয়ে তৈরি হতে পারে। তাই registration-এর সময় একভাবে normalize করে login-এর সময় অন্যভাবে করলে user নিজের password দিয়েও login করতে নাও পারে।
 
-যুক্তিটা হলো বৈধ user সাধারণত login-এ password যাচাই করায় অল্প কয়েকবার, কিন্তু database dump পাওয়া আক্রমণকারী বিপুল সংখ্যক অনুমান চালাতে পারে। প্রতিটি অনুমানে সময় ও memory খরচ করালে মোট খরচ বাড়ে। আক্রমণকারী parallel hardware ব্যবহার করতে পারে, তাই শুধু ধীর হওয়া নয়, memory ব্যবহারসহ সঠিক password-hashing নকশা গুরুত্বপূর্ণ।
+NIST Unicode password-এর ক্ষেত্রে NFC normalization-এর নির্দেশনা দেয়। গুরুত্বপূর্ণ হলো registration ও verification-এ একই নিয়ম ধারাবাহিকভাবে প্রয়োগ করা। Password-এর byte length আর character count এক নয়, তাই library ও protocol-এর সীমাবদ্ধতাও বুঝতে হবে।
 
-ধারণাটা বোঝাতে নিচে একটি illustrative তুলনা দেওয়া হলো। এগুলো সর্বজনীন benchmark নয়:
+## ১১. Login endpoint-ও নিরাপদ করতে হবে
 
-| কাজ | খরচের ধরন |
-|---|---|
-| ১০ লক্ষ × SHA-256 | খুব দ্রুত; প্রতিটি অনুমানের খরচ কম |
-| ১ × Argon2id (নির্বাচিত parameter) | ইচ্ছাকৃতভাবে বেশি সময় ও memory লাগে |
+Password storage ঠিক করলেই login endpoint নিরাপদ হয়ে যায় না।
 
-সংখ্যাগুলো hardware ও configuration অনুযায়ী আলাদা হবে, তাই নির্দিষ্ট অনুপাতকে সর্বজনীন ধরে নেওয়া ঠিক নয়। মূল ধারণাটি হলো: password hash যাচাইয়ের প্রতিটি অনুমানকে ইচ্ছাকৃতভাবে ব্যয়বহুল করতে হবে। বৈধ user-এর কাছে এর মূল্য সামান্য বিলম্ব; আক্রমণকারীর কাছে তা অনেক বেশি মোট খরচ।
+### একই ভুল বার্তা
 
-### কোন password-hashing পদ্ধতি, আর কেন?
+ধরা যাক, email না পেলে server বলে, "এই email-এ account নেই।" আর password ভুল হলে বলে, "Password ভুল।"
 
-Password storage-এর জন্য এমন পদ্ধতি দরকার, যা প্রতিটি অনুমানকে ইচ্ছাকৃতভাবে ব্যয়বহুল করে। সাধারণ-purpose hash যেমন SHA-256 দ্রুত কাজ করার জন্য তৈরি; password guessing-এর ক্ষেত্রে সেই গতি আক্রমণকারীর সুবিধা।
+আক্রমণকারী অনেক email পরীক্ষা করে account-এর তালিকা বানাতে পারে। এটাকে **account enumeration** বলে।
 
-**Argon2id** আধুনিক password storage-এর একটি ভালো default পছন্দ। এটি সময়ের পাশাপাশি memory-ও ব্যবহার করে, ফলে অনেক অনুমান একসঙ্গে চালানো আক্রমণকারীর জন্য ব্যয়বহুল হয়। **scrypt** এবং **PBKDF2**-ও নির্দিষ্ট পরিস্থিতিতে ব্যবহারযোগ্য; **bcrypt** পুরোনো system-এ দেখা যেতে পারে, তবে legacy সীমাবদ্ধতা বুঝে নিতে হয়। এই নামগুলো মুখস্থ করাই অধ্যায়ের লক্ষ্য নয়। মূল ধারণা হলো, password সংরক্ষণের জন্য সাধারণ দ্রুত hash নয়, password-guessing প্রতিরোধে তৈরি উপযুক্ত algorithm ব্যবহার করতে হয়।
+তাই login ব্যর্থ হলে সাধারণত একই ধরনের বার্তা দিতে হয়: "Email বা password সঠিক নয়।" HTTP response-ও এমন হওয়া উচিত, যাতে account আছে কি না সহজে বোঝা না যায়।
 
-Algorithm বেছে নেওয়ার পর তার configuration-ও গুরুত্বপূর্ণ। খুব কম খরচ আক্রমণকারীকে বেশি অনুমানের সুযোগ দেয়; অতিরিক্ত খরচ বৈধ login-কে ধীর করতে পারে এবং server-এর resource নিঃশেষ করার ঝুঁকি তৈরি করতে পারে। তাই বাস্তব system-এ রক্ষণাবেক্ষণাধীন, বিশ্বস্ত library-এর সুপারিশ অনুসরণ করে নিজের workload-এ configuration যাচাই করতে হয়। এখানে কোনো একটি parameter set-কে সব system-এর জন্য সঠিক বলা হচ্ছে না।
+এর একটা UX trade-off আছে। বৈধ user বুঝতে পারে না email ভুল, নাকি password ভুল। নিরাপত্তার জন্য এই অসুবিধা অনেক system-এ মেনে নেওয়া হয়।
 
-### Stored hash record: পরে যাচাই করার মতো তথ্য
+### Response time-ও তথ্য ফাঁস করতে পারে
 
-Password সংরক্ষণের সময় server শুধু hash রাখে না; ব্যবহৃত algorithm ও তার configuration-সহ যাচাইয়ের জন্য দরকারি metadata-ও সংরক্ষণ করে। অনেক system-এ এগুলো একটি encoded record-এ থাকে। এতে ভবিষ্যতে algorithm বা configuration উন্নত করার সময় পুরোনো password hash কোন পদ্ধতিতে তৈরি হয়েছিল, তা বোঝা যায়।
+বার্তা একই হলেও response time আলাদা হতে পারে। Account না থাকলে server যদি সঙ্গে সঙ্গে উত্তর দেয়, আর account থাকলে password hash যাচাই করতে সময় নেয়, আক্রমণকারী অনেক request তুলনা করে account আছে কি না আন্দাজ করতে পারে।
 
-```mermaid
-flowchart TD
-    P["User password"] --> S["প্রতি password-এর জন্য আলাদা random salt"]
-    S --> H["Password storage-এর জন্য তৈরি ধীর hash"]
-    H --> R["Hash + salt + algorithm/configuration-এর তথ্য সংরক্ষণ"]
-    R --> L["পরের login-এ password আবার যাচাই"]
-    L --> V{"Stored record গ্রহণযোগ্য এবং password মেলে?"}
-    V -->|হ্যাঁ| OK["Login সফল"]
-    V -->|না| NO["Login ব্যর্থ"]
-```
+একটি প্রচলিত কৌশল হলো account না পাওয়া গেলেও আগে থেকে তৈরি dummy password hash যাচাই করা। এতে response time কাছাকাছি রাখা সহজ হয়। তবে timing difference পুরোপুরি দূর হয়েছে, এমন নিশ্চয়তা নয়।
 
-এখানে দুটি মূল কথা মনে রাখো: salt গোপন রাখার জিনিস নয়, আর database-এ hash থাকলেই password ভাঙা অসম্ভব হয়ে যায় না। এই record-এর নির্দিষ্ট format কী, বা কোনো library-তে তার প্রতিটি field কীভাবে validate করতে হয়, সেগুলো implementation detail। বাস্তব system-এ record-কে অবিশ্বাস্য input ধরে supported library-এর নির্দেশনা অনুসরণ করতে হবে; অজানা বা অগ্রহণযোগ্য record দিয়ে যাচাই চালানো যাবে না।
+### Rate limiting এবং throttling
 
-### 🧪 Edge case: database-এর record-ও কি বিশ্বাস করব?
+Online attack-এ আক্রমণকারী `/login`-এ অনেক request পাঠাতে পারে। Rate limiting ও throttling চেষ্টা নিয়ন্ত্রণ করে। শুধু IP address ধরে সীমা দিলে proxy network দিয়ে request ছড়িয়ে দেওয়া সম্ভব। তাই account, IP, device বা আচরণগত signal মিলিয়ে স্তরভিত্তিক নিয়ন্ত্রণ দরকার।
 
-ধরো, কেউ database-এর একটি password-hash record বদলে দিল। Stored data-তে algorithm বা configuration-এর তথ্য থাকলেও সেটি অন্ধভাবে বিশ্বাস করা যাবে না। ভুল বা অস্বাভাবিক তথ্য ব্যবহার করলে login যাচাই নিজেই অতিরিক্ত resource খরচ করাতে পারে, অথবা password যাচাইয়ের নিয়ম দুর্বল হয়ে যেতে পারে।
+তবে account-কে স্থায়ীভাবে lock করে দেওয়াও বিপজ্জনক। আক্রমণকারী অন্যের email জেনে ইচ্ছা করে বারবার ভুল password পাঠিয়ে বৈধ user-কে আটকে রাখতে পারে। তাই progressive delay, risk-based challenge এবং user notification-এর মতো ব্যবস্থা বিবেচনা করতে হয়।
 
-মূল নিরাপত্তার নিয়মটি সহজ: **শুধু সমর্থিত ও গ্রহণযোগ্য password-hash record দিয়েই যাচাই চালাও; অন্যথায় login ব্যর্থ করো।** ঠিক কোন field, format বা সীমা validate করতে হবে, তা ব্যবহৃত standard ও library-র documentation-এর বিষয়। এই অধ্যায়ে নির্দিষ্ট parser-এর implementation শেখানো হচ্ছে না।
+### Credential stuffing আর password spraying
 
-### এই নিরাপত্তার দাম: আমাদেরই server
+এ দুটি brute force-এর মতোই দেখায়, কিন্তু এক নয়।
 
-Password যাচাইকে ইচ্ছাকৃতভাবে ব্যয়বহুল করলে আক্রমণকারীর প্রতিটি অনুমানের খরচ বাড়ে, কিন্তু server-এর প্রতিটি login-এর খরচও বাড়ে। অনেক login একসঙ্গে এলে বা আক্রমণকারী প্রচুর অনুরোধ পাঠালে CPU ও memory নিঃশেষ হতে পারে।
+- **Brute force:** একটি account-এর জন্য অনেক সম্ভাব্য password চেষ্টা।
+- **Password spraying:** অনেক account-এ অল্প কয়েকটি সাধারণ password চেষ্টা।
+- **Credential stuffing:** অন্য কোনো service থেকে ফাঁস হওয়া email-password জোড়া এখানে চেষ্টা করা।
 
-তাই password storage-কে আলাদা করে দেখা যাবে না। Rate limiting, একসঙ্গে চলা password verification-এর সীমা, এবং login abuse শনাক্ত করার ব্যবস্থা একসঙ্গে দরকার। মূল trade-off হলো: বৈধ user-এর login ব্যবহারযোগ্য রাখতে হবে, আবার stolen hash নিয়ে offline guessing-ও যতটা সম্ভব ব্যয়বহুল করতে হবে।
+Credential stuffing-এর বিরুদ্ধে rate limit একা যথেষ্ট নয়। Proxy network, bot detection, compromised-password screening, MFA এবং অস্বাভাবিক login activity শনাক্ত করা একসঙ্গে কাজে লাগে।
 
-### Pepper: আরেক স্তর, ছোট করে
+## ১২. MFA কী করে, আর কী করে না?
 
-**Pepper** হলো salt-এর মতো আরেকটা মান, কিন্তু সবার জন্য একই, আর গোপন। Database-এ রাখা হয় না, রাখা হয় আলাদা secret store বা hardware-এ। উদ্দেশ্য: কেউ শুধু database পেলে pepper ছাড়া অনুমান শুরুই করতে পারবে না। OWASP আর NIST দুজনেই এটাকে defense in depth হিসেবে দেখে, নিজে একা যথেষ্ট নয়। দামটা: pepper ফাঁস হলে বদলাতে সব user-কে password reset করাতে হয়, কারণ পুরোনো password ছাড়া নতুন pepper দিয়ে hash বানানো যায় না। এই অধ্যায়ে আমরা pepper রাখছি না।
+**MFA (Multi-Factor Authentication)** মানে login-এর জন্য একাধিক ধরনের প্রমাণ চাওয়া। Password জানা একটি factor। এর সঙ্গে authenticator app-এর code, security key বা অন্য উপযুক্ত factor যোগ করা যেতে পারে।
 
----
+MFA password hash cracking-এর খরচ বাড়ায় না। আক্রমণকারী database dump নিয়ে password guess করার সময় MFA তার হিসাবকে ধীর করে না।
 
-পাঁচ ধাপ পাশাপাশি দেখি। প্রশ্নটা হলো: dump হাতে এলে আক্রমণকারী প্রতিটা নকশায় কী পায়?
+কিন্তু আক্রমণকারী password জেনে গেলেও account-এ ঢোকার জন্য দ্বিতীয় factor দরকার হতে পারে। ফলে password leak থেকে সরাসরি account takeover-এর ঝুঁকি কমে।
 
-```mermaid
-flowchart TD
-    D["Database dump আক্রমণকারীর হাতে"] --> P["Plaintext<br/>আরিফের প্রথম নকশা"]
-    D --> E["Encrypted<br/>চাবি সাধারণত app-এর কাছেই"]
-    D --> F["দ্রুত hash, যেমন SHA-256"]
-    D --> S["Salt + দ্রুত hash"]
-    D --> A["Salt + ধীর, memory-hungry hash<br/>Argon2id"]
-    P --> R1["পড়লেই account দখল"]
-    E --> R2["চাবি পেলে সব একসঙ্গে"]
-    F --> R3["দুর্বল password দ্রুত ভাঙে<br/>একই password-এর hash এক"]
-    S --> R4["আগে থেকে তৈরি table পুনর্ব্যবহার কঠিন<br/>কিন্তু প্রতি অনুমান এখনো সস্তা"]
-    A --> R5["প্রতি অনুমান দামি<br/>শক্ত password guess করা কঠিন"]
-```
+সব MFA সমান phishing-resistant নয়। SMS বা টাইপ করা one-time code কিছু আক্রমণ ঠেকালেও phishing-এর বিরুদ্ধে সীমাবদ্ধতা আছে। Passkey ও WebAuthn আরও শক্তিশালী phishing-resistant পদ্ধতি। এগুলো এই সিরিজের পরের security chapter-এ বিস্তারিত আসবে।
 
-নিচের দিকে যত যাই, প্রতিটা ধাপ আগের ধাপের একটা নির্দিষ্ট ফাঁক বন্ধ করে। কোনোটাই একা যথেষ্ট নয়। আর শেষ ঘরে "শক্ত password" শর্তটা লক্ষ করো, কারণ নিচে ঠিক সেখানেই সমস্যা শুরু হবে।
+## ১৩. Password storage-এর জীবনচক্র
 
----
+আজকের algorithm চিরকাল যথেষ্ট থাকবে না। Hardware উন্নত হয়, আক্রমণকারীর হিসাব করার ক্ষমতাও বাড়ে। তাই password-hash configuration সময়ের সঙ্গে পর্যালোচনা করতে হয়।
 
-## ⚠️ ৬. Login endpoint: ভালো hash-ও ভুল দরজায় নষ্ট হয়
+অনেক system login-এর সময় stored hash-এর algorithm ও parameter পরীক্ষা করে। পুরোনো configuration হলে user-এর পাঠানো password দিয়ে নতুন configuration-এ hash তৈরি করে database update করে। একে **rehash on login** বলা হয়।
 
-Hash ঠিক হলো। কিন্তু `/login` নিজেই আক্রমণকারীকে অনেক কিছু জানিয়ে দিতে পারে, যদি আমরা অসাবধান থাকি।
+এর সীমাবদ্ধতা আছে: যে user আর login করে না, তার hash পুরোনোই থেকে যায়। দীর্ঘদিন নিষ্ক্রিয় account-এর ক্ষেত্রে reset বাধ্যতামূলক করা একটি বিকল্প, তবে এতে user friction বাড়ে।
 
-**বার্তায় তথ্য ফাঁস।** Login ব্যর্থ হলে আরিফ যদি লেখে "এই email-এ কোনো account নেই", আর password ভুল হলে লেখে "password ভুল", তাহলে আক্রমণকারী এই বার্তা দেখেই বুঝে নেয় কোন email আমাদের user। OWASP-র নির্দেশনা: password ভুল না user ভুল, দুই ক্ষেত্রেই একই, সাধারণ বার্তা, আর HTTP status-ও এক। এর দাম আছে। বৈধ user এতে বিভ্রান্ত হতে পারে, কারণ সে জানতে পারে না কোথায় ভুল। এটা একটা UX ছাড় যা মেনে নিতে হয়।
+### Password reset-ও একটি দরজা
 
-**সময়ে তথ্য ফাঁস।** বার্তা এক রাখলেও আরেকটা সংকেত থেকে যায়: সময়। Account না পাওয়া গেলে server যদি সঙ্গে সঙ্গে ফিরে যায়, আর account পাওয়া গেলে password hash যাচাই করে, তাহলে একই error message দিলেও response time আলাদা হতে পারে। অনেক অনুরোধের সময় তুলনা করে আক্রমণকারী account আছে কি না অনুমান করতে পারে। OWASP-এর পরামর্শ হলো failure path-এও কাছাকাছি ধরনের কাজ করা, যেমন আগে থেকে তৈরি dummy hash যাচাই করা। এতে timing-এর পার্থক্য কমে, কিন্তু সব timing signal পুরোপুরি দূর হয়েছে এমন নিশ্চয়তা নয়।
+Password ভুলে গেলে user-কে reset করতে হয়। কিন্তু reset link যদি দীর্ঘদিন valid থাকে, একাধিকবার ব্যবহার করা যায়, বা অনুমান করা সম্ভব হয়, তাহলে সেটাই account takeover-এর নতুন পথ।
 
-এই flow-তে দুটো সূক্ষ্ম বিষয় আছে। প্রথমত, dummy hash-এর সঙ্গে password মিলে গেলেও account না পাওয়া গেলে login সফল হবে না। দ্বিতীয়ত, password যাচাই সফল হলে পুরোনো parameter-এ তৈরি hash-কে বর্তমান policy অনুযায়ী rehash করার সুযোগ থাকে।
+এই অধ্যায়ে reset flow-এর সম্পূর্ণ implementation দেখানো হচ্ছে না। Reset token নিরাপদে issue, expire ও একবার ব্যবহারযোগ্য করা দরকার। Password reset-এর পর পুরোনো session কীভাবে বাতিল হবে, তা অধ্যায় ১৫-তে আসবে।
 
-```mermaid
-flowchart TD
-    R["Login: email + password"] --> Q["Email দিয়ে account খোঁজো"]
-    Q --> F{"Account পাওয়া গেছে?"}
-    F -->|"হ্যাঁ"| S["Stored password hash বেছে নাও"]
-    F -->|"না"| D["আগে থেকে তৈরি dummy hash বেছে নাও"]
-    S --> V["একই password-verification পদ্ধতি চালাও"]
-    D --> V
-    V --> O{"Account পাওয়া গেছে এবং<br/>password যাচাই সফল?"}
-    O -->|"না"| X["সাধারণ login failure"]
-    O -->|"হ্যাঁ"| Y["Login সফল"]
-    S -. "Hash-এর parameter পুরোনো?" .-> U["সফল login-এর পর নিরাপদে rehash"]
-```
+## ১৪. Threat model: আক্রমণকারী কী করতে পারে?
 
-(অধ্যায় ১-এর টীকা এখানেও খাটে: `401`-এর সঙ্গে `WWW-Authenticate` header আর browser-এর জন্য login পেজে redirect, এসব বাদ দিয়েছি। এই অধ্যায়ের প্রশ্ন অন্য।)
+| আক্রমণকারীর সুযোগ | সম্ভাব্য কাজ | যে নিয়ন্ত্রণ সাহায্য করে |
+|---|---|---|
+| শুধু `/login`-এ request পাঠাতে পারে | Brute force, spraying, enumeration | Rate limit, throttling, generic response, monitoring |
+| Database dump পেয়েছে | Offline password guessing | Salt, Argon2id, শক্ত password ও blocklist |
+| অন্য site-এর credential পেয়েছে | Credential stuffing | MFA, compromised-password screening, bot detection |
+| User-কে phishing করতে পারে | Password চুরি | Phishing-resistant MFA, passkey/WebAuthn |
+| Application server-এ ঢুকেছে | Login-এর সময় plaintext password পড়া | Server security, secret handling, incident response |
+| Database-এ লিখতে পারে | Stored hash বদলানো | Database integrity, least privilege, access monitoring |
 
-আরও দুটো ছোট কিন্তু জরুরি নিয়ম, যেগুলো diagram-এ আলাদা করে মনে রাখতে হবে। প্রথমত, password কখনো log-এ যাবে না। অধ্যায় ১-এ আমরা দেখেছিলাম একটা ভুল debug log প্রতিটা header ফাঁস করতে পারে। Request body log করার আগে `password` field মুছে ফেলতে হয়। দ্বিতীয়ত, password শুধু HTTPS-এ যাবে। TLS ছাড়া hash-এর কোনো মানে থাকে না, কারণ password তার আগেই পথে ধরা পড়ে।
+এখানে একটি গুরুত্বপূর্ণ সীমা আছে: password hash database-এ থাকলেও আক্রমণকারী যদি database-এ লিখতে পারে, সে hash বদলে দিতে পারে। Password hashing database write access-এর বিকল্প প্রতিরক্ষা নয়।
 
-পুরো প্রবাহটা একসঙ্গে দেখা যাক। প্রশ্নটা হলো: password কোথায় plaintext, কোথায় শুধু hash?
+## ১৫. Trade-off: নিরাপত্তারও দাম আছে
 
-```mermaid
-sequenceDiagram
-    actor U as কর্মী
-    participant S as KenaKata server
-    participant DB as Database
+- **Login ধীর হয়।** Password hashing ইচ্ছাকৃতভাবে ব্যয়বহুল। বৈধ user-এর login-এও সেই খরচ পড়ে।
+- **Server-এর resource লাগে।** অনেক login একসঙ্গে এলে CPU ও memory চাপের মুখে পড়ে। Concurrency limit ও rate limit দরকার।
+- **Lockout উল্টো অস্ত্র হতে পারে।** অতিরিক্ত কঠোর lockout দিয়ে আক্রমণকারী বৈধ user-কে আটকে দিতে পারে।
+- **Generic error message বিভ্রান্ত করতে পারে।** Account enumeration কমে, কিন্তু user বুঝতে পারে না কোন তথ্যটি ভুল।
+- **Password manager-এর ওপর নির্ভরতা বাড়ে।** Unique, দীর্ঘ password মনে রাখা কঠিন। Manager ব্যবহার করলে ঝুঁকি কমে, কিন্তু user-কে তা ব্যবহার করতে শেখাতে হয়।
+- **Hash parameter বদলাতে হয়।** সময়ের সঙ্গে configuration update করতে হবে। Rehash on login সব inactive account-এ কাজ করে না।
+- **Pepper secret-এর দায় বাড়ায়।** Database-এর বাইরে secret রাখতে হয় এবং rotation পরিকল্পনা দরকার।
+- **Recovery flow আলাদা attack surface।** Login যত শক্তই হোক, reset flow দুর্বল হলে account হারানো সম্ভব।
 
-    Note over U,DB: Password বানানো বা বদলানো
-    U->>S: email + password (HTTPS)
-    S->>S: policy যাচাই (দৈর্ঘ্য, blocklist)
-    S->>S: নতুন random salt, Argon2id চালানো
-    S->>DB: hash record সংরক্ষণ (algorithm, configuration, salt, hash)
-    Note over U,DB: Login
-    U->>S: email + password (HTTPS)
-    S->>DB: email দিয়ে stored hash আনা (না পেলে dummy hash)
-    S->>S: stored string থেকে salt আর parameter পড়ে আবার hash
-    S->>S: password যাচাইয়ের ফল নিরাপদভাবে যাচাই
-    S-->>U: সফল হলে Identity, নইলে সবসময় একই বার্তা
-```
+## ১৬. এই ব্যবস্থা কী সমাধান করে না?
 
-ছবিতে লক্ষ করো, plaintext password শুধু দুটো জায়গায়: পথে (HTTPS-এ ঢাকা) আর server-এর memory-তে কয়েক মিলিসেকেন্ড। Database-এ কখনো না। আরেকটা জিনিস: server-এর ভেতরে যে আক্রমণকারী ঢুকে বসে আছে, সে ওই কয়েক মিলিসেকেন্ডে plaintext দেখতে পারে। Hashing সেই আক্রমণ থেকে বাঁচায় না। তালিকাটা §১২-তে আছে।
+Password hashing database dump-এর ক্ষতি কমায়। কিন্তু এটি সব security problem-এর সমাধান নয়।
 
----
+- **দুর্বল password:** Argon2id guess-এর খরচ বাড়ায়, কিন্তু সহজ password-কে অজেয় করে না।
+- **Phishing ও keylogger:** User নিজে password আক্রমণকারীর কাছে দিয়ে দিলে hash সাহায্য করতে পারে না।
+- **Server compromise:** আক্রমণকারী application server-এ থাকলে login-এর সময় password memory থেকে পেতে পারে।
+- **Database write access:** আক্রমণকারী hash বদলাতে পারলে password hashing যথেষ্ট নয়।
+- **Password reuse:** অন্য service-এর password leak আমাদের নিয়ন্ত্রণে নেই।
+- **Online attack:** Slow hash একা request-এর সংখ্যা নিয়ন্ত্রণ করে না। Rate limit আলাদা দরকার।
+- **অন্য customer data:** নাম, ফোন, ঠিকানা password hash-এর মাধ্যমে সুরক্ষিত হয় না।
+- **Recovery ও session:** Reset flow এবং login-এর পর পরিচয় ধরে রাখার ব্যবস্থা আলাদা করে সুরক্ষিত করতে হবে।
+- **Authorization:** সঠিক user-কে চেনা আর সে কী করতে পারবে, দুটি আলাদা প্রশ্ন। অধ্যায় ২ ও ১৬-তে authorization আছে।
+- **Backup leak:** Password hashing backup link গোপন রাখে না। এটি ফাঁসের ক্ষতি কমায়, ফাঁস হওয়া ঠেকায় না।
 
-## ৭. যা hash বাঁচাতে পারে না: password নিজেই দুর্বল
+## ১৭. সাধারণ ভুল ধারণা
 
-ধরো আরিফের hashing নিখুঁত। তবু একটা প্রশ্ন বাকি: আক্রমণকারী কীভাবে অনুমান করে?
+**"Password encrypt করে রাখলেই নিরাপদ।"** Server-এর password ফিরিয়ে আনার ক্ষমতার দরকার নেই। Password যাচাই করার মতো উপাত্ত রাখাই যথেষ্ট।
 
-সে সব সম্ভাব্য সংমিশ্রণ চেষ্টা করে না। সে চেষ্টা করে **মানুষ যা বেছে নেয়** সেই ক্রমে। নাম আর জন্মসাল। `123` আর `@`-এর মতো ছোট সংযোজন। একটা শব্দ, তার শেষে বছর, তার শেষে একটা চিহ্ন। মানুষের মন আন্দাজযোগ্য, আর আক্রমণকারীর নিয়মগুলো সেই আন্দাজ থেকেই লেখা। `rafi1985`, `shuvo@123`, `Tuli2024!` এই তালিকার প্রথম দিকেই পড়ে। "বড় হাতের অক্ষর, সংখ্যা আর চিহ্ন দিন" শর্ত মেনে মানুষ ঠিক ওই কাজগুলোই করে, যেগুলো আক্রমণকারী আগে থেকে জানে।
+**"SHA-256 শক্তিশালী, তাই password-এর জন্যও ভালো।"** SHA-256 দ্রুত হওয়ার জন্য তৈরি। Password guessing-এর ক্ষেত্রে দ্রুততাই সমস্যা।
 
-তাই hash যত ধীরই হোক, দুর্বল password-এর সামনে সেটা শুধু সময় কেনে। বাকি কাজটা policy-র।
+**"Salt গোপন রাখতে হবে।"** Salt hash-এর পাশেই থাকে। গোপন secret হলে সেটি pepper।
 
-NIST-এর SP 800-63B-4, যা আগের SP 800-63B-কে প্রতিস্থাপন করেছে, password নিয়ে কিছু নির্দেশ দেয় যেগুলো অনেকের পুরোনো অভ্যাসের উল্টো:
+**"Salt থাকলে password ভাঙা যায় না।"** Salt precomputed table-এর সুবিধা কমায়, কিন্তু একটি নির্দিষ্ট দুর্বল password guess করা ঠেকায় না।
 
-- **দৈর্ঘ্য:** NIST SP 800-63B-4 অনুযায়ী password-ই একমাত্র factor হলে ন্যূনতম ১৫ অক্ষর; MFA-র অংশ হিসেবে ব্যবহার হলে ন্যূনতম ৮। সর্বোচ্চ দৈর্ঘ্য কমপক্ষে ৬৪ অক্ষর সমর্থন করা উচিত। এটি ওই standard-এর নির্দেশনা, সব service-এর জন্য স্বয়ংক্রিয়ভাবে প্রয়োগ করা policy নয়।
-- **কোনো composition rule নয়:** "বড় হাতের অক্ষর আর সংখ্যা লাগবেই" ধরনের শর্ত চাপানো নিষিদ্ধ (SHALL NOT)।
-- **নিয়মিত বদল নয়:** ৯০ দিন পরপর password বদলাতে বাধ্য করা চলবে না। তবে compromise-এর প্রমাণ থাকলে বদলাতে বাধ্য করতে হবে।
-- **Blocklist:** পরিচিত বা ফাঁস-হওয়া password এবং service-সংশ্লিষ্ট অনুমানযোগ্য password প্রত্যাখ্যান করো। Blocklist-এ পুরো password মিলিয়ে দেখো, কেবল তার কোনো অংশ মিলে গেল বলে নয়। প্রত্যাখ্যান করলে কারণ ও ভালো password বাছার পরামর্শ দাও।
-- **সুবিধা:** password manager আর autofill অনুমোদন (SHALL), paste অনুমোদন (SHOULD), আর password দেখানোর বিকল্প (SHOULD)।
-- **নিষিদ্ধ:** password hint আর security question ("প্রথম পোষা প্রাণীর নাম কী?")।
+**"Argon2id দিলেই দুর্বল password চলবে।"** না। এটি প্রতিটি guess-এর খরচ বাড়ায়। Password-এর দৈর্ঘ্য ও অনুমানযোগ্যতাও গুরুত্বপূর্ণ।
 
-কেন composition rule নয়? কারণ ওগুলো মানুষকে একই পূর্বানুমেয় পথে ঠেলে দেয়। বরং দৈর্ঘ্য আর blocklist আসল কাজ করে। NIST-এর মূল যুক্তি পাওয়া যাবে তাদের Appendix A-তে।
+**"বড় হাতের অক্ষর, সংখ্যা ও চিহ্ন বাধ্যতামূলক করলেই password শক্ত হয়।"** মানুষ প্রায়ই predictable pattern ব্যবহার করে। দীর্ঘ password, blocklist ও password manager বেশি কার্যকর।
 
-```mermaid
-flowchart TD
-    P["Password জমা"] --> N["Unicode password হলে<br/>একই normalization policy (যেমন NFC)"]
-    N --> L{"Password যথেষ্ট দীর্ঘ এবং<br/>service policy-তে গ্রহণযোগ্য?"}
-    L -->|"না"| R["ব্যবহারকারীকে কারণ জানাও"]
-    L -->|"হ্যাঁ"| B{"পুরো password কি পরিচিত,<br/>ফাঁস-হওয়া বা অনুমানযোগ্য?"}
-    B -->|"হ্যাঁ"| R
-    B -->|"না"| A["Password গ্রহণ"]
-    A -.-> X["বড় হাতের অক্ষর + সংখ্যা + চিহ্ন বাধ্যতামূলক নয়"]
-```
+**"প্রতি ৯০ দিনে password বদলালে নিরাপত্তা বাড়ে।"** শুধু সময় পেরিয়েছে বলে নিয়মিত বদল বাধ্যতামূলক করার বদলে compromise-এর প্রমাণ পেলে বদলাতে বলা হয়।
 
-ফাঁস-হওয়া password-এর তালিকার জন্য OWASP একটা সহজ রাস্তা দেখায়: Pwned Passwords-এর মতো সেবা, যেটা নিজের server-এ চালানোও যায়। আর NIST সতর্ক করে, তালিকা অতি বিশাল হওয়ার সুবিধা কম, কারণ এটা online আক্রমণের জন্য, আর সেখানে আলাদা করে throttling আছে।
+**"Rate limit থাকলে credential stuffing শেষ।"** Proxy network দিয়ে request ছড়ানো যায়। একাধিক স্তরের প্রতিরক্ষা দরকার।
 
-### বাংলা password আর Unicode
+**"Hash ফাঁস হলে ক্ষতি নেই।"** ক্ষতি নির্ভর করে password কতটা শক্ত, salt আছে কি না এবং hashing algorithm কতটা ব্যয়বহুল।
 
-NIST password-এ Unicode অক্ষর সমর্থন করার এবং একইভাবে উপস্থাপিত password-কে সামঞ্জস্যপূর্ণভাবে যাচাই করার গুরুত্ব তুলে ধরে। বাংলাসহ বিভিন্ন ভাষায় একই রকম দেখতে password অক্ষর ভিন্ন internal representation-এ আসতে পারে। ফলে password তৈরি করার সময় একরকমভাবে সামলানো হলেও login-এর সময় অন্যরকম হলে user নিজের সঠিক password দিয়েও ঢুকতে নাও পারে।
-
-NIST Unicode password-এর জন্য NFC normalization ব্যবহারের পরামর্শ দেয়। মূল শিক্ষা: **password গ্রহণ, সংরক্ষণ এবং যাচাইয়ের সময় একই normalization policy ধারাবাহিকভাবে প্রয়োগ করতে হবে।** NFC কীভাবে code point বদলায়, তার অভ্যন্তরীণ বিশদ এই অধ্যায়ের লক্ষ্য নয়।
-
-### বৈধ user-এর খরচ
-
-নীরা এবার আপত্তি তুলল: "পনেরো অক্ষর? রাফির কর্মীরা বিরক্ত হবে। ওরা তো ফোনে টাইপ করে।"
-
-আরিফের উত্তর তিনটা অংশে। এক, কর্মীরা একটা বাক্যের মতো passphrase নিতে পারে, যা মনে রাখা সহজ, টাইপ করা কঠিন নয়। দুই, paste আর password manager খোলা রাখা। তিন, password দেখানোর বোতাম, যাতে ফোনে ভুল টাইপ ধরা পড়ে। এতে ঘর্ষণ কমে, শূন্য হয় না। আর ১৫ অক্ষর একটা সিদ্ধান্ত, চিরন্তন সত্য নয়: NIST-এর হিসাবে MFA থাকলে ন্যূনতম ৮ চলে। অধ্যায় ২৩-এ MFA এলে এই সীমা আবার ভাবা যাবে।
-
----
-
-## ৮. দরজার সামনের আক্রমণ: online
-
-Offline দিকটা সামলানো হলো। এবার ছবির বাম দিকে ফিরি, যেখানে আক্রমণকারী আমাদের `/login`-এ দাঁড়িয়ে।
-
-OWASP তিন ধরনের আক্রমণ আলাদা করে:
-
-| আক্রমণ | কী করে |
-|---|---|
-| Brute force | একটা account, অনেক password |
-| Credential stuffing | অন্য কোনো site থেকে ফাঁস-হওয়া email-password জোড়া নিয়ে আমাদের এখানে চেষ্টা |
-| Password spraying | একটা দুর্বল password, অনেক account |
-
-**Credential stuffing** হলো §২-এর "ক্ষতি দুই"-এর উল্টো পিঠ। আমাদের ফাঁস শুভর email খুলতে পারত। আবার অন্য কোথাও শুভর password ফাঁস হলে সেটা দিয়ে KenaKata-য় ঢোকার চেষ্টা হবে। Password reuse দুদিকেই কাটে।
-
-"আমাদের তো মোটে তিনজন user, কে চেষ্টা করবে?" ভাবনাটা অধ্যায় ১-এর optimism bias-এরই আরেক চেহারা। এই আক্রমণ কাউকে বেছে নেয় না। একটা tool লক্ষ লক্ষ জোড়া অনেক site-এ চালায়, আর যেখানে মেলে সেখানেই ঢোকে।
-
-**Rate limiting** প্রথম প্রতিরক্ষা: প্রতি account-এ, প্রতি উৎসে, আর সব মিলিয়ে ব্যর্থ চেষ্টা সীমিত করা। কিন্তু OWASP একটা বাস্তব সতর্কতা দেয়। Credential stuffing-এর tool-গুলো প্রায়ই proxy network ব্যবহার করে হাজার হাজার আলাদা IP থেকে অনুরোধ ছড়িয়ে দেয়, তাই প্রতি IP-তে সংখ্যা কম থাকে। শুধু IP-ভিত্তিক সীমা বা block তাই যথেষ্ট নয়। একটা পূর্বানুমেয় সীমার ওপর নির্ভর না করে, স্বল্প ও দীর্ঘ সময় আর ধীর-কিন্তু-ধারাবাহিক ট্র্যাফিক দুটোই ভাবতে হয়।
-
-**Lockout একটা দ্বিধার অস্ত্র।** তিনবার ভুল করলে account বন্ধ, শুনতে নিরাপদ। কিন্তু তাহলে আক্রমণকারী ইচ্ছা করে রাফির account-এ ভুল password পাঠিয়ে সকালে দোকান খোলার সময় তাকে বাইরে আটকে রাখতে পারে। Authentication এখানে availability-র বিরুদ্ধেই অস্ত্র হয়ে যায়। NIST এর জন্য কয়েকটা কৌশল দেয়: ধারাবাহিক ব্যর্থ চেষ্টার ঊর্ধ্বসীমা (সর্বোচ্চ ১০০, যা সীমা, লক্ষ্য নয়), ব্যর্থতা বাড়লে অপেক্ষার সময় বাড়ানো (৩০ সেকেন্ড থেকে এক ঘণ্টা পর্যন্ত), আর bot শনাক্তকরণ। শক্ত তালা না লাগিয়ে ক্রমশ ধীর করে দেওয়া, এই হলো মূল ধারণা।
-
-আরও কয়েকটা ছোট স্তর, কোনোটাই একা যথেষ্ট নয়:
-
-- ফাঁস-হওয়া password আগেই আটকানো (§৭-এর blocklist)।
-- ব্যর্থ চেষ্টার সংখ্যা মাপা আর log রাখা (password ছাড়া), যাতে আক্রমণ চোখে পড়ে। OWASP বলে প্রতিটা প্রতিরক্ষার জন্য মাপার জায়গা রাখতে।
-- অস্বাভাবিক login হলে user-কে জানানো। OWASP-র সূক্ষ্ম পরামর্শ: ভুল password-এর চেষ্টায় user-কে বিরক্ত করা নয়, বরং ঠিক password দেওয়া হলো অথচ পরের ধাপে (যেমন MFA-তে) আটকে গেল, এমন ক্ষেত্রে।
-- Email-কে username হিসেবে ব্যবহারের ঝুঁকি: OWASP বলে, email সব জায়গায় এক বলে credential stuffing সহজ হয়, আর নিজের বাছা অনন্য username এই ঝুঁকি কমায়। কিন্তু সেটা ব্যবহারকারীর জন্য অসুবিধাজনক। KenaKata এই মুহূর্তে email-ই রাখছে, আর এটা একটা সচেতন ছাড়।
-
-আর সবচেয়ে কার্যকর স্তরটা সম্পর্কে OWASP একটাই কথা বলে: MFA হলো password-সংক্রান্ত আক্রমণের বেশিরভাগের বিরুদ্ধে সবচেয়ে ভালো প্রতিরক্ষা, যার মধ্যে credential stuffing আর password spraying আছে। এটা এই অধ্যায়ে শুধু একটা ইঙ্গিত। অধ্যায় ২৩-এ আমরা MFA-কে ঠিকমতো বানাব।
-
----
-
-## ৯. সকালের কাজ: ঘটনার পর আরিফ কী করল
-
-বৃহস্পতিবার সকালে ফিরি। Hashing, salt, policy, সব এখনো আরিফের মাথায় নকশা। আজকের প্রশ্ন: ক্ষতি যা হওয়ার হয়ে গেছে, এখন কী?
-
-প্রথম সিদ্ধান্তটা অস্বস্তিকর। কেউ ফাইলটা নামিয়েছে কি না আরিফ জানে না, আর এই প্রশ্নের নিশ্চিত উত্তর কখনো মিলবে না, কারণ offline আক্রমণ কোনো চিহ্ন রাখে না। তাই ধরে নিতে হয় **তিনটা password-ই ফাঁস**।
-
-যে ক্রমে কাজগুলো হলো, ক্রমটাই গুরুত্বপূর্ণ:
-
-1. **ফাইলের লিঙ্ক বন্ধ করা।** আর backup বা config-এ থাকা অন্য যেকোনো secret বদলে ফেলা। Dump-এ যা ছিল, তার সবই এখন ফাঁস ধরতে হবে।
-2. **আগে hashing চালু, তারপর reset।** যদি reset আগে হতো, নতুন password আবার plaintext-এ জমা হতো। তাই আজকের `passwd` package আগে deploy, তারপর নতুন password।
-3. **পুরোনো password বাতিল।** আরিফ চাইলে plaintext থেকেই hash বানিয়ে নিতে পারত। কিন্তু যে password একবার ফাঁস হয়েছে, সেটা আর ভরসার নয়। NIST-এর নির্দেশও তাই: compromise-এর প্রমাণ থাকলে বদল বাধ্যতামূলক। তিনজনকেই নতুন password বানাতে হলো।
-4. **পুরোনো plaintext মুছে ফেলা।** Database column, পুরোনো backup, আর যেখানে যেখানে কপি আছে।
-5. **রাফি আর কর্মীদের বলা:** একই password অন্য কোথাও থাকলে সেখানেও বদলাতে।
-6. **Log দেখা:** ফাইলটা share করার পর থেকে অচেনা IP থেকে login হয়েছে কি না। (না পাওয়া মানে ঘটেনি তা নয়, আর আইনি বা নিয়ন্ত্রক-সংক্রান্ত দায় এই সিরিজের বাইরে।)
-
-তিন নম্বর ধাপে আরিফ একটা নতুন সমস্যা দেখল। নতুন password বানানোর জন্য user-কে একটা উপায় দিতে হয়: email-এ পাঠানো একটা লিঙ্ক। কিন্তু যদি কোনো কর্মীর email-ও একই পুরোনো password-এ দখল হয়ে থাকে, তাহলে reset-এর লিঙ্ক আক্রমণকারীর কাছেই যাবে। অধ্যায় ১-এ বলেছিলাম recovery একটা নতুন দরজা। এই সপ্তাহে আরিফ সেই দরজা খুলতে বাধ্য হলো, আর তার নিজের নিরাপত্তা নির্ভর করল অন্যের email-এর ওপর। Password reset-এর পুরো flow এই সিরিজে আলাদা করে শেখানো হচ্ছে না। Reset বা account compromise-এর পরে পুরোনো session ও credential কীভাবে অকার্যকর হবে, তা অধ্যায় ১৫-তে দেখব।
-
-### সামনের দিনের জন্য: hash-ও পুরোনো হয়
-
-আজ যা "ন্যূনতম" তা পাঁচ বছর পরে অপর্যাপ্ত হতে পারে, কারণ hardware সস্তা হয়। এই কারণেই stored string-এ algorithm আর parameter লেখা থাকে। NIST বলে cost factor সময়ের সঙ্গে বাড়ানো উচিত, আর OWASP-র সবচেয়ে প্রচলিত কৌশল হলো: user পরের বার login করলে তখনই আবার hash করা, কারণ আসল password তখনই হাতে থাকে। আমাদের `NeedsRehash` ঠিক এই কাজ করে। সীমাবদ্ধতা: যে user আর ফেরে না, তার hash পুরোনোই থেকে যায়। দীর্ঘ নিষ্ক্রিয় account-এর hash মুছে দিয়ে পরের বার reset বাধ্যতামূলক করা একটা বিকল্প, যার দাম হলো ব্যবহারকারীর বিরক্তি।
-
----
-
-## 🔍 ১০. Threat model: password-এর পাশে আক্রমণকারী
-
-এখন পুরো ছবিটা আক্রমণকারীর দৃষ্টিকোণ থেকে। এখানে credential হলো password, আর server যা রাখে, সেই hash হলো তার **যাচাইয়ের উপাত্ত** (verifier)। অধ্যায় ১-এর টেবিলে "server-এ থাকে যাচাইয়ের উপাত্ত" বলে যে ফাঁকা জায়গা রেখেছিলাম, সেটা এখন ভরা।
+## ১৮. এক নজরে
 
 | প্রশ্ন | উত্তর |
 |---|---|
-| কী control করে? | `/login`-এর ইনপুট (email, password)। নিজের machine-এ সীমাহীন offline হিসাব। দরকারে হাজারো আলাদা IP (proxy network) |
-| কী steal করতে পারে? | Database dump বা backup (hash)। Log-এ ভুলে থেকে যাওয়া password। Phishing পাতায় user-এর টাইপ-করা password। Keylogger। অন্য site-এর ফাঁস (reuse-এর কারণে) |
-| কী observe করতে পারে? | TLS না থাকলে পথে সব। Response-এর বার্তা, status আর সময় (কোন email আছে বোঝার জন্য)। Server-এ ঢুকতে পারলে login-এর মুহূর্তে plaintext |
-| কী modify করতে পারে? | Database-এ লেখার সুযোগ পেলে নিজের password-এর hash বসিয়ে দিতে পারে। তখন hash-এর শক্তি কোনো কাজেই আসে না |
-| কী replay করতে পারে? | Password replay-resistant নয় (NIST-ও এটা স্পষ্ট বলে): প্রতিবার একই মান যায়। একবার জানা গেলে যতবার খুশি, যতদিন না বদলায় |
-| Credential leak হলে কী হবে? | Account দখল। Reuse থাকলে অন্য account, বিশেষ করে email, আর তার মাধ্যমে recovery। `can` এটা ঠেকায় না (অধ্যায় ২) |
-| কতক্ষণ access পাবে? | যতক্ষণ না user password বদলায়। Password-এর মেয়াদ সাধারণত দীর্ঘ, আর NIST নিয়মিত বদলাতে বাধ্য করা নিষিদ্ধ করে |
-| Server কি detect করতে পারবে? | Online অনুমান: হ্যাঁ, ব্যর্থ চেষ্টার ধরনে। Offline cracking: না। ঠিক password নিয়ে আসা আক্রমণকারী: বৈধ user থেকে আলাদা করা কঠিন (অধ্যায় ১) |
-| Server কি revoke করতে পারে? | হ্যাঁ: পুরোনো password অকার্যকর করে reset বাধ্যতামূলক করা যায়, একজনের জন্য বা সবার জন্য। কিন্তু reset-এর পথ নিজেই একটা লক্ষ্য (§৯) |
-| ক্ষতি কীভাবে সীমিত হয়? | Argon2id আর salt (offline)। দৈর্ঘ্য আর blocklist (দুর্বল password)। Throttling আর stuffing-বিরোধী স্তর (online)। Least privilege (অধ্যায় ২)। MFA (অধ্যায় ২৩)। অস্বাভাবিক login-এ user-কে জানানো |
+| Password কী? | User-এর জানা গোপন মান, যা দিয়ে সে নিজের পরিচয় প্রমাণ করে |
+| Server কী রাখে? | Password নয়, password যাচাইয়ের জন্য hash record |
+| Hash কেন? | আসল password ফেরত না দিয়েও পরের login যাচাই করা যায় |
+| Salt কেন? | একই password-এর hash আলাদা করা এবং precomputed table-এর সুবিধা কমানো |
+| Argon2id কেন? | প্রতিটি guess-এ সময় ও memory খরচ বাড়ানো |
+| Pepper কী? | Database-এর বাইরে রাখা অতিরিক্ত secret |
+| Online attack কী? | Login endpoint দিয়ে আসা password guessing |
+| Offline attack কী? | Database dump নিয়ে নিজের machine-এ guessing |
+| Rate limit কী ঠেকায়? | Online request-এর গতি ও সংখ্যা নিয়ন্ত্রণ করে; offline guessing নয় |
+| MFA কী করে? | Password ফাঁস হলেও account takeover কঠিন করে |
 
----
+## আমরা কী শিখলাম?
 
-## ১১. Trade-off
+- Functional test পাস করা আর নিরাপদ হওয়া এক নয়।
+- Server-এর password মনে রাখার দরকার নেই; যাচাই করার উপাত্ত রাখলেই চলে।
+- Hash একমুখী হলেও password guess করা যায়।
+- Salt একই password-এর hash আলাদা করে, কিন্তু নিজে guess ধীর করে না।
+- Argon2id-এর মতো password-hashing algorithm প্রতিটি guess-কে ব্যয়বহুল করে।
+- Password-এর দৈর্ঘ্য, blocklist ও unique password গুরুত্বপূর্ণ।
+- Online ও offline attack আলাদা; rate limit offline guessing থামাতে পারে না।
+- Credential stuffing, password spraying ও brute force এক ধরনের আক্রমণ নয়।
+- Generic error message account enumeration কমাতে পারে।
+- MFA password cracking ধীর করে না, তবে password leak থেকে account takeover-এর ঝুঁকি কমায়।
+- Password reset, session invalidation ও backup protection আলাদা করে ভাবতে হয়।
 
-- **ঘর্ষণ।** ১৫ অক্ষরের ন্যূনতম দৈর্ঘ্য, password manager-এর ওপর নির্ভরতা, আর password যাচাইয়ের সামান্য বাড়তি বিলম্ব। শেষটা সাধারণত ছোট, প্রথম দুটো user-এর অভিজ্ঞতায় বেশি প্রভাব ফেলতে পারে।
-- **Server-এর খরচ আর নতুন লক্ষ্য।** Memory-hard hash মানে `/login` এখন ভারী, আর ভারী endpoint DoS-এর লোভনীয় জায়গা। Concurrency-র সীমা আর rate limit তাই আবশ্যক।
-- **Lockout বনাম availability।** কঠোর lockout আক্রমণকারীর হাতে নতুন অস্ত্র। ক্রমশ-বাড়া অপেক্ষা ভালো, কিন্তু সেটা বাস্তবায়ন আর পরিমাপে বেশি কাজ।
-- **নির্দিষ্ট বার্তা বনাম UX।** সাধারণ বার্তা user চেনা আটকায়, আবার বৈধ user-কেও বিভ্রান্ত করে।
-- **Email-ই username।** সুবিধা বড়। কিন্তু credential stuffing সহজ করে।
-- **Hash পুরোনো হয়।** Parameter আর algorithm বদলের কাজ চলতেই থাকে। Rehash-on-login কিছু user-কে কখনো ছোঁয় না।
-- **Recovery।** Password ভুলে যাওয়ার সমাধান যত সহজ, আক্রমণকারীর পথও তত সহজ।
-- **Pepper** (যদি নেওয়া হয়): বাড়তি সুরক্ষা, বাড়তি secret-এর দায়, বদলানো কঠিন।
+## নিজের বোঝাপড়া যাচাই
 
----
-
-## 🛑 ১২. এই সমাধান কী সমাধান করে না
-
-- **দুর্বল password।** Argon2id `rafi1985`-কে আটকাতে পারে না, শুধু প্রতি অনুমানের দাম বাড়ায়। Policy আর blocklist আলাদা কাজ করে।
-- **Phishing, keylogger, malware।** আক্রমণকারী যদি user-এর টাইপ করা মুহূর্তেই password পেয়ে যায়, hash-এর আর কোনো ভূমিকা নেই। Password phishing-resistant নয় (NIST)। এর উত্তর passkey আর WebAuthn, অধ্যায় ২৩।
-- **Server-এ ঢুকে বসে থাকা আক্রমণকারী।** Login-এর কয়েক মিলিসেকেন্ডে plaintext memory-তে থাকে।
-- **Database-এ লেখার সুযোগ।** আক্রমণকারী hash বদলে দিলে সুরক্ষা অকেজো।
-- **Reuse-এর ক্ষতি।** অন্য site-এ user-এর ফাঁস-হওয়া password আমাদের নিয়ন্ত্রণের বাইরে। Credential stuffing-এর বিরুদ্ধে আমরা শুধু প্রতিরক্ষা দাঁড় করাতে পারি, উৎস বন্ধ করতে পারি না।
-- **Online অনুমানের গতি।** ধীর hash প্রতি অনুমান ধীর করে, কিন্তু কতগুলো অনুমান আসতে পারবে তা ঠিক করে rate limit।
-- **Password ছাড়া বাকি ডেটা।** Customer-এর নাম, ফোন, ঠিকানা hash করা হয়নি, আর সেগুলো সুরক্ষার আলাদা প্রশ্ন (access control, ডেটা সংরক্ষণ, backup-এর নিয়ম)।
-- **Recovery আর reset-এর নিরাপত্তা।** Reset link issue, expiry ও একবার ব্যবহারযোগ্য করার পূর্ণ flow এখানে নেই। Reset-এর পরে session/credential invalidation অধ্যায় ১৫-তে, আর MFA/step-up অধ্যায় ২৩-এ আসবে।
-- **Login-এর পর পরিচয় ধরে রাখা।** আরিফ এখন নিরাপদে একবার যাচাই করতে পারে। পরের request-এ কী হবে, সেটা এখনো ঠিক হয়নি (অধ্যায় ৪)।
-- **Authorization।** চেনা user কী করতে পারবে, সেটা অধ্যায় ২ আর ১৬।
-- **Backup-এর লিঙ্ক ফাঁস।** সেই ভুলটা (গোপন URL) অধ্যায় ১-এর পাঠ, password hashing সেটা ঠেকায়নি। শুধু ফাঁসের ক্ষতি কমিয়েছে।
-
----
-
-## ১৩. সাধারণ ভুল ধারণা
-
-**"Password encrypt করে রাখলেই নিরাপদ।"** Encryption মানে চাবি আছে, আর চাবি app-এর কাছেই থাকে। Server-এর password ফিরিয়ে আনার ক্ষমতারই দরকার নেই।
-
-**"SHA-256 তো শক্তিশালী hash।"** শক্তিশালী মানে বিভিন্ন কাজে বিভিন্ন জিনিস। SHA-256 ফাইল যাচাইয়ের জন্য দ্রুত হতে বানানো। Password-এর জন্য দ্রুত হওয়াটাই দুর্বলতা।
-
-**"Salt গোপন রাখতে হবে।"** না। Salt hash-এর পাশেই থাকে। গোপন রাখার মতো জিনিস হলো pepper।
-
-**"Salt থাকলে password ভাঙা যায় না।"** Salt আগে থেকে তৈরি table-এর সুবিধা কমায় এবং একই password-এর hash-গুলোকে আলাদা করে। একটা নির্দিষ্ট দুর্বল password অনুমান করা সহজই থাকে।
-
-**"bcrypt বা Argon2id দিলে দুর্বল password-ও চলে।"** Hash সময় কেনে। দুর্বল password-এ সেই সময় কম লাগে।
-
-**"বড় হাতের অক্ষর, সংখ্যা আর চিহ্ন বাধ্যতামূলক করলে password শক্ত হয়।"** NIST এই ধরনের শর্ত চাপানো নিষিদ্ধ করে। মানুষ একই পূর্বানুমেয় সংযোজন করে। দৈর্ঘ্য আর blocklist বেশি কাজের।
-
-**"প্রতি ৯০ দিনে password বদলাতে বাধ্য করলে নিরাপত্তা বাড়ে।"** NIST-এর নির্দেশ উল্টো: নিয়মিত বদল নয়, compromise-এর প্রমাণ পেলেই বদল।
-
-**"Login ভুলের বার্তায় কোনটা ভুল জানানো ভদ্রতা।"** এটা আক্রমণকারীকে account-এর তালিকা বানিয়ে দেয়।
-
-**"Rate limit আছে, তাই credential stuffing শেষ।"** Proxy network দিয়ে অনুরোধ ছড়ালে প্রতি IP-তে সংখ্যা কম থাকে। একটা স্তর যথেষ্ট নয়।
-
-**"Hash ফাঁস হলে ক্ষতি নেই।"** ক্ষতি নির্ভর করে hash কতটা ধীর, salt আছে কি না, আর password কতটা শক্ত তার ওপর। আর যে আক্রমণকারী database-এ লিখতে পারে, তার কাছে hash আদৌ বাধা নয়।
-
----
-
-## ১৪. এক নজরে: Password (credential) আর তার সংরক্ষণ
-
-| প্রশ্ন | উত্তর |
-|---|---|
-| এটা কী? | User-এর জানা একটা গোপন মান, যা দিয়ে সে প্রমাণ করে "আমিই সে"। Server রাখে তার hash, মানে যাচাইয়ের উপাত্ত |
-| কেন এসেছে? | Authentication-এর জন্য এমন একটা প্রমাণ দরকার, যা সহজে বহন করা যায় আর যেকোনো device থেকে দেওয়া যায় |
-| কী সমাধান করে? | বেনামি প্রবেশ। Database ফাঁসে plaintext-এ সরাসরি ক্ষতি (hashing-এর ফলে) |
-| কী সমাধান করে না? | দুর্বল password, phishing, keylogger, server-এ ঢোকা আক্রমণকারী, database-এ লেখার সুযোগ, reuse-এর ক্ষতি, recovery-র নিরাপত্তা, পরিচয় ধরে রাখা (§১২) |
-| কোথায় থাকে? | User-এর মাথায় বা password manager-এ। Server-এর memory-তে login-এর কয়েক মিলিসেকেন্ড। Database-এ hash এবং যাচাইয়ের জন্য দরকারি metadata |
-| কে ব্যবহার করে? | User দেয়। Server যাচাই করে। Hash শুধু server-এর যাচাই-কাজে লাগে |
-| কীভাবে আক্রান্ত হয়? | অনুমান (brute force, stuffing, spraying), database ফাঁসের পর offline cracking, phishing, enumeration, lockout-কে অস্ত্র বানানো, reset-এর পথ |
-| ভেঙে পড়লে ক্ষতি? | ওই user-এর পরিচয়ে কাজ। Reuse থাকলে অন্য account-ও (§১০) |
-| মেয়াদ (lifetime)? | User-নিয়ন্ত্রিত, সাধারণত দীর্ঘ। NIST নিয়মিত বদল চায় না, compromise-এ বদল চায় |
-| বাতিল (revocation)? | Password বদল বা reset। Hash-এর algorithm আর parameter আলাদাভাবে হালনাগাদ হয় (rehash-on-login) |
-| বিকল্প? | Passkey আর WebAuthn (phishing-resistant), অন্য প্রদানকারীর মাধ্যমে login (OIDC, অধ্যায় ২১–২২), MFA-র সঙ্গে মিলিয়ে (অধ্যায় ২৩) |
-| কখন লাগে? | মানুষ-ব্যবহারকারীর জন্য সবচেয়ে সাধারণ প্রথম factor, বিশেষ করে সবার device আর পরিস্থিতি আলাদা হলে |
-| কখন লাগে না? | যেখানে user-ই নেই, শুধু service (অধ্যায় ২৪)। উচ্চ-ঝুঁকির কাজে শুধু password যথেষ্ট নয়। যন্ত্রের বানানো লম্বা random token-এর জন্য password-specific slow hash সাধারণত দরকার হয় না (session ID-এর ধারণা অধ্যায় ৪; machine-to-machine credential অধ্যায় ২৪) |
-| Production trade-off? | ঘর্ষণ, `/login`-এর খরচ আর DoS-এর ঝুঁকি, lockout-এর দ্বিধা, UX বনাম enumeration, hash-এর হালনাগাদ, recovery-র দরজা (§১১) |
-
----
-
-## আমরা কী শিখলাম? (What did we learn?)
-
-- সাধারণ functional test পাস করা আর নিরাপদ হওয়া এক নয়। "ঠিক মানুষ ঢুকছে তো?" আর "জিনিসটা অন্যের হাতে গেলে কী হবে?" আলাদা প্রশ্ন।
-- Server-কে password **জানতে** হয় না, শুধু **চিনতে** হয়। যে system password ফিরিয়ে দিতে পারে, সে ভুল জিনিস রাখছে।
-- Dump হাতে এলে আক্রমণকারী আমাদের নিয়ন্ত্রণের বাইরে, **offline**। তখন গুরুত্বপূর্ণ প্রতিরক্ষা হলো password অনুমান করা কঠিন রাখা এবং প্রতিটি অনুমানের খরচ বাড়ানো।
-- Salt প্রতিটা password-এর hash আলাদা করে এবং precomputed table-এর সুবিধা কমায়। Salt গোপন নয়, আর নিজে থেকে প্রতিটি অনুমান ধীর করে না। উপযুক্ত ধীর, memory-hard password-hashing algorithm প্রতিটি অনুমানের খরচ বাড়ায়।
-- Hash-এর শক্তি password-এর শক্তিকে ছাড়িয়ে যায় না। দৈর্ঘ্য আর blocklist composition rule-এর চেয়ে বেশি কাজের। বাংলা password-সহ Unicode password সামঞ্জস্যপূর্ণভাবে সামলানো গুরুত্বপূর্ণ।
-- Online আর offline দুটো আলাদা যুদ্ধক্ষেত্র। Rate limit offline guessing থামায় না; MFA hash cracking-এর খরচ বাড়ায় না, তবে password ফাঁস হলেও account takeover-এর ঝুঁকি কমাতে পারে।
-- সাধারণ error message ও কাছাকাছি processing time account enumeration-এর সংকেত কমায়, পুরোপুরি নির্মূলের নিশ্চয়তা দেয় না। Lockout নিজেই অস্ত্র হতে পারে।
-- Password আর তার hash আলাদা জিনিস: একটা credential, অন্যটা যাচাইয়ের উপাত্ত। আর পুরোনো হওয়ার জন্য hash-এর algorithm আর parameter সংরক্ষিত থাকে।
-- ফাঁসের পর ক্রম গুরুত্বপূর্ণ: আগে নতুন সংরক্ষণ চালু, তারপর reset। আর reset-এর পথ নিজেই একটা নতুন দরজা।
-
-## 🎯 নিজের বোঝাপড়া যাচাই
-
-ধরা যাক, database-এ `$argon2id$...` hash আছে, কিন্তু password খুব সহজ। আক্রমণকারীর কাছে dump আছে, তবে application server-এ প্রবেশাধিকার নেই। কোন কথাটি সবচেয়ে সঠিক?
+ধরা যাক, database-এ Argon2id hash আছে, কিন্তু password খুব সহজ। আক্রমণকারীর কাছে dump আছে, application server-এ প্রবেশাধিকার নেই। কোন কথাটি সবচেয়ে সঠিক?
 
 <details>
 <summary>উত্তর ও ব্যাখ্যা দেখো</summary>
 
-Argon2id ও salt offline guessing-কে ব্যয়বহুল করে, কিন্তু দুর্বল password-কে অসম্ভব করে না। Server-side rate limit এই offline কাজ থামাতে পারবে না, কারণ অনুমানগুলো server-এর বাইরে চলছে। শক্ত passphrase/blocklist, সঠিক password hashing, এবং online আক্রমণের জন্য আলাদা throttling দরকার।
+Argon2id ও salt offline guessing-কে ব্যয়বহুল করে, কিন্তু দুর্বল password-কে অসম্ভব করে না। Server-side rate limit এই offline কাজ থামাতে পারবে না, কারণ অনুমানগুলো server-এর বাইরে চলছে। শক্ত passphrase, blocklist, সঠিক password hashing এবং online attack-এর জন্য আলাদা throttling দরকার।
 
 </details>
 
-## 🧪 পাঁচ মিনিটের পরীক্ষা
+## পাঁচ মিনিটের পরীক্ষা
 
-**এক।** আগের চারটি প্রশ্নের উত্তর flowchart দেখে নিজে যাচাই করো।
+নিজের project-এর staging environment বা একটি কাল্পনিক design নিয়ে এই চারটি প্রশ্নের উত্তর দাও:
 
-```text
-পাঁচ মিনিটের চিন্তার অনুশীলন
+1. SHA-256 আর Argon2id-এর মধ্যে কোনটি password guess করা ব্যয়বহুল করে, এবং কেন?
+2. একই password ব্যবহার করা দুটি account-এর hash যেন এক না হয়, তার জন্য কী দরকার?
+3. Registration-এ NFC normalization করা হলেও login-এ না করলে কী সমস্যা হতে পারে?
+4. Database dump ফাঁস হলে rate limit কেন offline guessing থামাতে পারে না?
 
-১. SHA-256 আর Argon2id-এর মধ্যে কোনটি password guess করা ব্যয়বহুল করে, এবং কেন?
-২. একই password-এর জন্য দুটি account-এর hash যেন এক না হয়, তার জন্য কোন উপাদানটি দরকার?
-৩. Registration-এ NFC normalization করা হলেও login-এ না করলে কী সমস্যা হতে পারে?
-৪. Database dump ফাঁস হলে rate limit কেন offline guessing থামাতে পারে না?
+## একটা অস্বস্তিকর প্রশ্ন
 
-নিজের উত্তরের পাশে সংশ্লিষ্ট flowchart-এর security invariant লিখে দেখো। বাস্তব benchmark বা code চালানো এই অধ্যায়ের শেখার শর্ত নয়।
-```
+ধরে নিলাম, আরিফ password storage, salt, policy আর login failure-এর নিয়ম ঠিক করেছে। রাফি login করল। Server সফলভাবে তাকে চিনল।
 
-বাস্তব system-এ password-hashing configuration বেছে নিতে target hardware ও concurrent login load বিবেচনা করতে হয়। এই সিরিজে নির্দিষ্ট configuration শেখার বদলে সেই trade-off-এর কারণ বোঝাই লক্ষ্য।
+Password যাচাই ইচ্ছা করেই resource-intensive। তাই dashboard খোলার সময় browser যদি দশটি request পাঠায়, প্রতিটিতে আবার password hash যাচাই করা অকার্যকর হবে।
 
-**দুই।** কাল্পনিক একটি database dump-এ `password` column দেখলে কী প্রশ্ন করবে? সেখানে plaintext password আছে, নাকি password-guessing কঠিন করার জন্য তৈরি hash আছে? এরপর log-এ password বা credential-সংক্রান্ত তথ্য থাকার ঝুঁকি ব্যাখ্যা করো।
+তাহলে server পরের request-গুলোতে কীসের ভরসায় বলবে, "এই request-টাও রাফির"?
 
-## একটা অস্বস্তিকর প্রশ্ন (One uncomfortable question)
-
-ধরে নিলাম আরিফ এবার password storage, salt, policy আর login failure-এর মৌলিক নিয়মগুলো ঠিক করল। রাফি login করল, আর server সফলভাবে তাকে চিনল। Password যাচাই ইচ্ছাকৃতভাবে resource-intensive, তাই প্রতিটি পরের request-এ একই কাজ আবার করা অকার্যকর হবে।
-
-এবার রাফির dashboard একটা পেজ খুলতে পাঠায় দশটা request। প্রতিটায় এই খরচ দিয়ে password যাচাই করা যাবে না। অধ্যায় ১-এর সেই "প্রতি request-এ password" নকশা এখন শুধু অনিরাপদ নয়, অচল। আবার যাচাই না করলে server কীসের ভরসায় বলবে, "এই request-টাও রাফির"?
-
-**Password শুধু একবারই যাচাই করা যায়, কারণ সেটা ইচ্ছা করেই ভারী। তাহলে পরের প্রতিটা request-এ server কোন হালকা জিনিসের ভরসায় রাফিকে চিনবে? আর সেই জিনিসটা যদি চুরি হয়ে যায়, তাহলে আমরা কি ঠিক সেই জায়গাতেই ফিরে যাব, যেখান থেকে আজ বেরিয়ে এলাম?**
-
----
+**Password একবারই যাচাই করা যায়, কারণ যাচাইটি ইচ্ছা করেই ভারী। এরপর প্রতিটি request-এ server কোন হালকা প্রমাণের ভরসায় user-কে চিনবে? আর সেই প্রমাণ চুরি হয়ে গেলে কী হবে?**
 
 ## পরের অধ্যায়
 
-[অধ্যায় ৪: Session এবং Cookie](../04-session-and-cookie/README.md)। Login-এর পর server রাফির জন্য একটা হালকা চিহ্ন বানায়, আর browser সেটা বয়ে নিয়ে চলে। প্রশ্ন একটাই: ওই চিহ্ন কোথায় থাকবে, কে পড়তে পারবে, আর কে চুরি করতে পারবে।
+[অধ্যায় ৪: Session এবং Cookie](../04-session-and-cookie/README.md)। Login-এর পর server রাফির জন্য একটি হালকা পরিচয়-চিহ্ন তৈরি করে, আর browser সেটি বয়ে নিয়ে চলে। প্রশ্ন হলো, ওই চিহ্ন কোথায় থাকবে, কে পড়তে পারবে, আর কে চুরি করতে পারবে।
 
----
+## তথ্যসূত্র ও আরও পড়া
 
-## তথ্যসূত্র
+প্রথমবার উল্লেখের সময় acronyms-এর অর্থ:
 
-- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html): Argon2id-র ন্যূনতম configuration, scrypt, bcrypt (legacy, নির্দিষ্ট input-length limitation), PBKDF2, salt, pepper, work factor, hash হালনাগাদের কৌশল, encoded hash record format-এর সুপারিশ। এই লেখার সময় পাতাটা পুরো পড়ে মেলানো হয়েছে।
-- [NIST SP 800-63B-4, Digital Identity Guidelines: Authentication and Authenticator Management](https://pages.nist.gov/800-63-4/sp800-63b.html): §3.1.1 Passwords (দৈর্ঘ্য, composition rule নিষেধ, নিয়মিত বদল নিষেধ, blocklist, password manager আর paste, Unicode আর NFC, salt ও hash সংরক্ষণ, keyed hashing), §3.2.2 Rate Limiting, §3.2.7 Replay Resistance (password replay-resistant নয়)। লেখার সময় পড়ে মেলানো হয়েছে।
-- [OWASP Credential Stuffing Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Credential_Stuffing_Prevention_Cheat_Sheet.html): brute force, credential stuffing আর password spraying-এর পার্থক্য, MFA, proxy দিয়ে ছড়ানো আক্রমণ, ফাঁস-হওয়া password শনাক্তকরণ, অস্বাভাবিক ঘটনায় user-কে জানানো, unpredictable username। পড়ে মেলানো হয়েছে।
-- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html): সাধারণ error response, response-time discrepancy এবং automated attack প্রতিরোধ।
-- [RFC 9106: Argon2, the Memory-Hard Function for Password Hashing and Proof-of-Work Applications](https://www.rfc-editor.org/rfc/rfc9106.html): Argon2-র নকশা ও password hashing-এ memory-hard পদ্ধতির ভূমিকার প্রাথমিক specification। এই অধ্যায়ে RFC-র configuration-গুলো মুখস্থ করানো বা নির্দিষ্ট deployment-এর parameter বেছে দেওয়া লক্ষ্য নয়।
-- Password hashing implementation-এর সঠিকতা শুধু diagram দেখে প্রমাণ করা যায় না। বাস্তব system-এ রক্ষণাবেক্ষণাধীন library-এর official documentation অনুসরণ করতে হবে। এই সিরিজের উদাহরণগুলো implementation নয়, শেখার মডেল; এখানে লক্ষ্য algorithm, salt, offline guessing এবং trade-off-এর মূল ধারণা বোঝা।
+- **OWASP:** Open Worldwide Application Security Project। Application security নিয়ে কাজ করা একটি nonprofit foundation; এর Cheat Sheet-গুলো developer-দের জন্য ব্যবহারিক নিরাপত্তা নির্দেশনা দেয়।
+- **NIST:** National Institute of Standards and Technology। যুক্তরাষ্ট্রের একটি সরকারি সংস্থা, যারা standards ও cybersecurity guidance প্রকাশ করে।
 
-- Robert Morris, Ken Thompson, *Password Security: A Case History*, Communications of the ACM, ১৯৭৯: Unix-এর password file-এ salt-এর ঐতিহাসিক উদাহরণ। (ঐতিহাসিক সূত্র, স্পেসিফিকেশন নয়। সরাসরি মেলানো হয়নি।)
-- Unicode Standard Annex #15, *Unicode Normalization Forms* (NFC): NIST-এর নির্দেশনার সূত্রে। (সরাসরি পড়া হয়নি।)
+এই অধ্যায়ে নিচের নির্দেশনা ও specification ব্যবহার করা হয়েছে। এগুলো implementation-এর বিকল্প নয়; production system-এ ব্যবহৃত library ও platform-এর বর্তমান documentation-ও অনুসরণ করতে হবে।
 
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html): Argon2id, salt, pepper, work factor, hash migration ও password-hash record।
+- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html): Generic error response, response-time discrepancy ও automated attack।
+- [OWASP Credential Stuffing Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Credential_Stuffing_Prevention_Cheat_Sheet.html): Brute force, credential stuffing, password spraying, MFA ও bot mitigation।
+- [NIST SP 800-63B-4: Digital Identity Guidelines](https://pages.nist.gov/800-63-4/sp800-63b.html): Password length, blocklist, composition rule, periodic change, Unicode, rate limiting ও password storage।
+- [RFC 9106: Argon2](https://www.rfc-editor.org/rfc/rfc9106.html): Argon2 algorithm-এর specification।
+- Robert Morris ও Ken Thompson, *Password Security: A Case History*, Communications of the ACM, 1979: Unix password storage-এ salt ব্যবহারের ঐতিহাসিক আলোচনা।
+- [Unicode Standard Annex #15: Unicode Normalization Forms](https://unicode.org/reports/tr15/): Unicode normalization-এর specification।
