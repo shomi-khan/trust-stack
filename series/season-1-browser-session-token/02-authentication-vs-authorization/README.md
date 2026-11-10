@@ -204,7 +204,7 @@ Refund route-টি শুধু `POST` method-এর জন্য নিবন�
 
 ### এই permission model-এর পেছনের নীতিগুলো
 
-এগুলো আরিফের আবিষ্কার নয়। ১৯৭৫ সালে Jerome Saltzer আর Michael Schroeder "The Protection of Information in Computer Systems" নামের একটা লেখায় protection mechanism-এর কয়েকটা design principle দিয়েছিলেন। প্রায় অর্ধশতক পরেও সেগুলো আমাদের ছোট `can` ফাংশনে চেনা চেহারায় ফিরে আসে। সঙ্গে OWASP-এর Authorization Cheat Sheet আর Developer Guide একই কথা আজকের ভাষায় বলে।
+এগুলো আরিফের আবিষ্কার নয়। ১৯৭৫ সালে Jerome Saltzer আর Michael Schroeder "The Protection of Information in Computer Systems" নামের একটা লেখায় protection mechanism-এর কয়েকটা design principle দিয়েছিলেন। প্রায় অর্ধশতক পরেও সেগুলো আমাদের ছোট `can` ফাংশনে চেনা চেহারায় ফিরে আসে। সঙ্গে **OWASP (Open Worldwide Application Security Project)**-এর Authorization Cheat Sheet আর Developer Guide একই কথা আজকের ভাষায় বলে। OWASP application security নিয়ে কাজ করা একটি nonprofit foundation; developer-দের জন্য ব্যবহারিক guidance ও security resources প্রকাশ করে।
 
 - **Deny by default** (Saltzer-Schroeder-এর *fail-safe defaults*)। Permission table-এ অজানা action-কে প্রত্যাখ্যান করার নিয়মটি এই কাজ করছে। যুক্তিটা চমৎকার: যে system "অনুমতি আছে কি?" দেখে, তার ভুল সাধারণত "না" বলে ফেলে। সেটা তাড়াতাড়ি ধরা পড়ে, কারণ কেউ আটকে গিয়ে অভিযোগ করে। যে system "কী নিষিদ্ধ" তার তালিকা রাখে, তার ভুল "হ্যাঁ" বলে ফেলে। সেটা নিঃশব্দে থেকে যেতে পারে। বন্ধ দরজা চেঁচায়, খোলা দরজা চুপ থাকে।
 - **প্রতিটা request-এ check** (*complete mediation*)। আগের request-এ অনুমতি ছিল বলে পরেরটায় ধরে নেওয়া যায় না। OWASP-ও বলে, বেশিরভাগ request-এ ঠিকমতো check করা যথেষ্ট নয়।
