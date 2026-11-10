@@ -5,7 +5,7 @@ title: "CSRF"
 status: draft
 ---
 
-# CSRF
+# CSRF (Cross-Site Request Forgery)
 
 অধ্যায় ৫ একটা প্রশ্নে শেষ হয়েছিল, আর আরিফ প্রশ্ন ঝুলিয়ে রাখার মানুষ নয়।
 
@@ -63,7 +63,7 @@ Cookie: __Host-id=<browser-এর পাঠানো session cookie>
 
 - Browser-এর স্বয়ংক্রিয় credential পাঠানো কীভাবে CSRF-এর সুযোগ তৈরি করে।
 - CSRF token, Origin/Fetch Metadata, SameSite এবং re-authentication কীভাবে স্তর হিসেবে কাজ করে।
-- CORS, authentication ও CSRF defense কেন একে অন্যের বিকল্প নয়।
+- **CORS (Cross-Origin Resource Sharing)**, authentication ও CSRF defense কেন একে অন্যের বিকল্প নয়।
 
 ## ১. ঘটনাটা ছবিতে
 
