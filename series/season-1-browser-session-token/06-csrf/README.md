@@ -5,7 +5,7 @@ title: "CSRF"
 status: draft
 ---
 
-# CSRF
+# CSRF (Cross-Site Request Forgery)
 
 অধ্যায় ৫ একটা প্রশ্নে শেষ হয়েছিল, আর আরিফ প্রশ্ন ঝুলিয়ে রাখার মানুষ নয়।
 
@@ -63,7 +63,7 @@ Cookie: __Host-id=<browser-এর পাঠানো session cookie>
 
 - Browser-এর স্বয়ংক্রিয় credential পাঠানো কীভাবে CSRF-এর সুযোগ তৈরি করে।
 - CSRF token, Origin/Fetch Metadata, SameSite এবং re-authentication কীভাবে স্তর হিসেবে কাজ করে।
-- CORS, authentication ও CSRF defense কেন একে অন্যের বিকল্প নয়।
+- **CORS (Cross-Origin Resource Sharing)**, authentication ও CSRF defense কেন একে অন্যের বিকল্প নয়।
 
 ## ১. ঘটনাটা ছবিতে
 
@@ -172,7 +172,7 @@ Authentication বলে *কে*। CSRF-এর পুরো গল্প *ই�
 
 ### ৪.২ স্তর ১: request কোথা থেকে এল? (Fetch Metadata আর Origin)
 
-browser কিছু header নিজে বসায়, যেগুলো পাতার JavaScript বদলাতে পারে না। দুটো কাজে লাগবে:
+Browser কিছু request header নিজে যোগ করে, যেগুলো page-এর JavaScript সাধারণত বদলাতে পারে না। এ ধরনের header-কে **Fetch Metadata** বলা হয়; request কোন context থেকে এসেছে, সে সম্পর্কে browser-নির্ধারিত তথ্য দেয়। সঙ্গে `Origin` header-ও কাজে লাগে। `Origin` হলো HTTP request header, যাতে browser request শুরু হওয়া origin-এর scheme, host ও port জানায়। দুটো কাজে লাগবে:
 
 | header | কী বলে | মান |
 | ------ | ------ | --- |

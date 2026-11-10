@@ -188,7 +188,7 @@ JWT signature-ভিত্তিক local validation-এর সুবিধা �
 - **Server-side denylist বা revocation state:** নির্দিষ্ট token-কে expiration-এর আগেও reject করতে পারে, যদি resource server সেই state দেখে।
 - **Introspection বা central status check:** প্রতিটি token-এর active state central service থেকে যাচাই করা যায়; এতে dependency ও latency বাড়ে।
 - **Account-level invalidation বা credential versioning:** একাধিক token invalidate করার policy বানানো যায়, তবে সব resource server-এ সেই state কার্যকর হতে হবে।
-- **Sender-constrained token:** token-কে নির্দিষ্ট client-এর cryptographic key-এর সঙ্গে bind করার পদ্ধতি কিছু token-theft ও replay scenario কঠিন করে। OAuth context-এ DPoP (RFC 9449) ও mTLS (RFC 8705) এর উদাহরণ। DPoP-ও সব replay আটকানোর নিশ্চয়তা নয়: proof নিজেই স্বল্প validity window-তে replay হতে পারে, তাই server-side proof validation এবং প্রয়োজনমতো `jti` replay tracking গুরুত্বপূর্ণ। এগুলো সাধারণ bearer-token validation-এর সমার্থক নয়; সঠিক key handling ও protocol validation প্রয়োজন।
+- **Sender-constrained token:** token-কে নির্দিষ্ট client-এর cryptographic key-এর সঙ্গে bind করার পদ্ধতি কিছু token-theft ও replay scenario কঠিন করে। OAuth context-এ **DPoP (Demonstrating Proof of Possession, RFC 9449)** ও **mTLS (mutual TLS, RFC 8705)** এর উদাহরণ। DPoP-ও সব replay আটকানোর নিশ্চয়তা নয়: proof নিজেই স্বল্প validity window-তে replay হতে পারে, তাই server-side proof validation এবং প্রয়োজনমতো `jti` (JWT ID claim) replay tracking গুরুত্বপূর্ণ। এগুলো সাধারণ bearer-token validation-এর সমার্থক নয়; সঠিক key handling ও protocol validation প্রয়োজন।
 
 কোনো একটিকে সব ব্যবস্থার universal replacement ভাববে না। জরুরি invalidation-এর প্রয়োজন, architecture-এর availability এবং attacker-এর ক্ষমতা অনুযায়ী control বেছে নিতে হয়।
 

@@ -103,7 +103,7 @@ sequenceDiagram
 
 - **এক সময়ে একটি refresh:** একই client-এর একাধিক process যেন একসঙ্গে refresh শুরু না করে, client-side coordination সাহায্য করতে পারে। তবে আলাদা device বা process-এর race পুরোপুরি দূর নাও হতে পারে।
 - **সীমিত retry policy:** সাময়িক network error হলে অনবরত পুরোনো token পাঠানোর বদলে সীমিত retry ও পরিষ্কার recovery path দরকার।
-- **Idempotent recovery বা সীমিত grace window:** server একই logical refresh operation-কে নিরাপদে চিনতে এবং প্রয়োজনীয় response পুনরুদ্ধার করতে পারলে user experience উন্নত হতে পারে। কিন্তু replay ঠেকানোর নিশ্চয়তা দুর্বল করে এমন grace period ঝুঁকি বাড়াতে পারে। এটি স্বয়ংক্রিয় fix নয়, এবং নির্দিষ্ট protocol ও threat model ছাড়া নিরাপদ বলে ধরে নেওয়া যাবে না।
+- **Idempotent recovery বা সীমিত grace window:** একই logical refresh operation আবার এলে duplicate effect না ঘটিয়ে আগের ফল নিরাপদে ফেরত দেওয়ার ব্যবস্থা থাকলে user experience উন্নত হতে পারে। কিন্তু replay ঠেকানোর নিশ্চয়তা দুর্বল করে এমন grace period ঝুঁকি বাড়াতে পারে। এটি স্বয়ংক্রিয় fix নয়, এবং নির্দিষ্ট protocol ও threat model ছাড়া নিরাপদ বলে ধরে নেওয়া যাবে না।
 - **Re-authentication:** server নিরাপদে আগের operation-এর ফল উদ্ধার করতে না পারলে user-কে নতুন করে authenticate করানো বিরক্তিকর হতে পারে, কিন্তু অস্পষ্ট পরিস্থিতিতে এটি গ্রহণযোগ্য recovery policy হতে পারে।
 
 Client-এর retry আচরণ আর server-এর reuse policy একসঙ্গে নকশা করতে হবে। শুধু “timeout হলে একই token আবার পাঠাও” বললে race-এর সমস্যাটি অমীমাংসিত থেকে যায়।

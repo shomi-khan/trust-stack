@@ -21,7 +21,7 @@ status: draft
 
 - Access token ও refresh token কেন আলাদা কাজ করে।
 - Refresh token-কে protected resource API-তে না পাঠানোর কারণ।
-- Device storage, TLS, expiry, revocation ও refresh failure-এর user experience কীভাবে একসঙ্গে ভাবতে হয়।
+- Device storage, **TLS (Transport Layer Security)**, expiry, revocation ও refresh failure-এর user experience কীভাবে একসঙ্গে ভাবতে হয়।
 
 ## ১. Access token আর refresh token-এর কাজ এক নয়
 

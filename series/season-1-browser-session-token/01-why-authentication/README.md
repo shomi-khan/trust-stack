@@ -156,7 +156,7 @@ URL এমন জিনিস, যেটা বহু জায়গা দি�
 - **থাকা জিনিস** (something you have): ফোন, security key
 - **তুমি নিজে** (something you are): আঙুলের ছাপ, মুখ
 
-প্রতিটার দুর্বলতা আলাদা। জানা জিনিস অনুমান হয়, চুরি হয়, একই password আরেক জায়গায় ব্যবহার হয়। থাকা জিনিস হারায়, চুরি যায়। নিজের শরীরের জিনিস একবার ফাঁস হলে বদলানো যায় না। কোনোটাই নিখুঁত নয়। Password আসবে অধ্যায় ৩-এ, একাধিক ধরনের মিশ্রণ (MFA) অধ্যায় ২৩-এ।
+প্রতিটার দুর্বলতা আলাদা। জানা জিনিস অনুমান হয়, চুরি হয়, একই password আরেক জায়গায় ব্যবহার হয়। থাকা জিনিস হারায়, চুরি যায়। নিজের শরীরের জিনিস একবার ফাঁস হলে বদলানো যায় না। কোনোটাই নিখুঁত নয়। Password আসবে অধ্যায় ৩-এ, আর একাধিক ধরনের প্রমাণ একসঙ্গে ব্যবহার করার পদ্ধতি **Multi-Factor Authentication (MFA)** আসবে অধ্যায় ২৩-এ।
 
 তাহলে সংজ্ঞাটা দাঁড়াল এরকম:
 
@@ -238,7 +238,7 @@ price updated: product=17 price=120 by=user-4 ip=203.0.113.58
 
 এবার "কে করল?" প্রশ্নের একটা উত্তর পাওয়া সম্ভব। তবে একটা শর্ত আছে। এই উত্তর ততটাই নির্ভরযোগ্য, যতটা নির্ভরযোগ্য আমাদের authentication। দোকানের সবাই একটাই login ভাগ করে ব্যবহার করলে accountability আবার ধসে পড়ে।
 
-> **নামকরণের একটা ফাঁদ।** HTTP-তে `401` status-এর নাম "Unauthorized", কিন্তু মানে হলো "তোমার authentication নেই বা বৈধ নয়"। অনুমতির ব্যর্থতার জন্য আলাদা `403`, সেটা অধ্যায় ২-এ। এই flow-টি ধারণা বোঝানোর জন্য সরল করা হয়েছে: RFC 9110 অনুযায়ী `401` response-এ `WWW-Authenticate` header থাকতেই হবে, আর server-rendered web app সাধারণত সরাসরি login পেজে redirect করে। ওসব পরে, যখন আমরা ঠিক করব প্রমাণটা আসলে কী।
+> **নামকরণের একটা ফাঁদ।** HTTP-তে `401` status-এর নাম "Unauthorized", কিন্তু মানে হলো "তোমার authentication নেই বা বৈধ নয়"। অনুমতির ব্যর্থতার জন্য আলাদা `403`, সেটা অধ্যায় ২-এ। এই flow-টি ধারণা বোঝানোর জন্য সরল করা হয়েছে: Request for Comments (**RFC**) হলো Internet Engineering Task Force (IETF)-এর প্রকাশিত technical document series; RFC 9110 অনুযায়ী `401` response-এ `WWW-Authenticate` header থাকতেই হবে, আর server-rendered web app সাধারণত সরাসরি login পেজে redirect করে। ওসব পরে, যখন আমরা ঠিক করব প্রমাণটা আসলে কী।
 
 ---
 
@@ -256,7 +256,7 @@ Christopher Nolan-এর *Memento* সিনেমার নায়কের �
 
 আরিফ whiteboard-এ সবচেয়ে সোজা flow-টা আঁকল। প্রতিটা request-এই password পাঠাও। Server প্রতিবার যাচাই করবে, কিছু মনে রাখতে হবে না, stateless স্বভাবের সঙ্গেও খাপ খায়।
 
-এটা কল্পনার সমাধান নয়। HTTP-তে এর একটা প্রমিত রূপ আছে: Basic authentication scheme (RFC 7617)। এখানে প্রতিটা request-এর `Authorization` header-এ `user:password` Base64 করে পাঠানো হয়। Base64 একটা encoding, encryption নয়। RFC নিজেই বলছে, TLS-এর মতো আলাদা সুরক্ষা ছাড়া এটা নিরাপদ নয়।
+এটা কল্পনার সমাধান নয়। HTTP-তে এর একটা প্রমিত রূপ আছে: Basic authentication scheme (RFC 7617)। এখানে প্রতিটা request-এর `Authorization` header-এ `user:password` Base64 করে পাঠানো হয়। Base64 একটা encoding, encryption নয়। RFC নিজেই বলছে, **Transport Layer Security (TLS)**-এর মতো আলাদা সুরক্ষা ছাড়া এটা নিরাপদ নয়।
 
 ```mermaid
 sequenceDiagram

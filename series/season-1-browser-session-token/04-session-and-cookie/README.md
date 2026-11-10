@@ -9,7 +9,7 @@ status: draft
 
 সোমবার সকাল। ফাঁসের ঘটনার পর KenaKata-র প্রথম পুরো কর্মদিবস।
 
-রাফি দোকান খুলে নতুন passphrase টাইপ করে login করল। Argon2id তাকে চিনল। তারপর সে অর্ডারের তালিকা খুলল, একটা অর্ডারে ঢুকল, ফিরে এল, আরেকটায় ঢুকল। নীরা ফোনে তার সঙ্গে কথা বলছিল।
+রাফি দোকান খুলে নতুন passphrase টাইপ করে login করল। Server Argon2id দিয়ে stored password hash যাচাই করল; যাচাই সফল হওয়ায় login হলো। তারপর সে অর্ডারের তালিকা খুলল, একটা অর্ডারে ঢুকল, ফিরে এল, আরেকটায় ঢুকল। নীরা ফোনে তার সঙ্গে কথা বলছিল।
 
 "পাতাগুলো আগের চেয়ে একটু ভারী লাগছে," রাফি বলল।
 
@@ -114,7 +114,7 @@ Cookie: user=user-1
 
 ## ৩. দ্বিতীয় ভাবনা: cookie-তে সই করে দিই
 
-আরিফ একটা ব্লগে পড়েছিল, cookie-তে সই (signature) জুড়ে দিতে হয়। ধারণাটা সহজ। server-এর কাছে একটা গোপন চাবি থাকে। cookie-র মান হয় `user-7` আর তার একটা সই (যেমন HMAC), এরকম:
+আরিফ একটা ব্লগে পড়েছিল, cookie-তে সই (signature) জুড়ে দিতে হয়। ধারণাটা সহজ। server-এর কাছে একটা গোপন চাবি থাকে। cookie-র মান হয় `user-7` আর তার একটা সই (যেমন **HMAC, Hash-based Message Authentication Code**), এরকম:
 
 ```
 user=user-7.9f2c41…
@@ -167,7 +167,7 @@ sequenceDiagram
     Staff->>B: email আর passphrase লেখে
     B->>S: POST /login (HTTPS)
     S->>S: Argon2id দিয়ে password যাচাই
-    S->>S: CSPRNG দিয়ে নতুন session ID বানায়
+    S->>S: **CSPRNG (Cryptographically Secure Pseudorandom Number Generator)** দিয়ে নতুন session ID বানায়
     S->>St: hash(session ID) → user-1, মেয়াদ
     S-->>B: 303 আর Set-Cookie: __Host-id=session ID
     B->>B: cookie jar-এ রাখে
@@ -249,7 +249,7 @@ session ID-র গুণ নিয়ে OWASP-র Session Management Cheat Shee
 | JavaScript পড়তে পারে? | `HttpOnly` থাকলে না | যেখানে রাখা হবে সেখান থেকে পারে |
 | অন্য সাইট থেকে request এলে? | browser তবু পাঠাতে পারে (অধ্যায় ৬) | পাঠায় না, কারণ সেই সাইটের কাছে মানটা নেই |
 
-browser নিজে পাঠায়, এই সুবিধাটাই আবার সমস্যা। RFC 10025 §8.2 এই বৈশিষ্ট্যের নাম দেয় **ambient authority**। request কে শুরু করেছে, সেটা না দেখে browser authority জুড়ে দেয়। অধ্যায় ৬-এর পুরো গল্প এটা। আর অধ্যায় ৯–১১ দেখাবে, header-এ রাখলে কোন সমস্যা কমে আর কোনটা নতুন করে আসে।
+browser নিজে পাঠায়, এই সুবিধাটাই আবার সমস্যা। RFC 10025 §8.2 এই বৈশিষ্ট্যের নাম দেয় **ambient authority**: browser request কে শুরু করেছে তা না বুঝেই, cookie policy মিলে গেলে credential জুড়ে দেয়। ফলে অন্য site থেকে শুরু হওয়া request-ও user-এর পরিচয়ে যেতে পারে। অধ্যায় ৬-এর পুরো গল্প এটা। আর অধ্যায় ৯–১১ দেখাবে, header-এ রাখলে কোন সমস্যা কমে আর কোনটা নতুন করে আসে।
 
 ---
 
