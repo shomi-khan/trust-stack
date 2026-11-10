@@ -106,7 +106,7 @@ flowchart TD
 | পথ | কী ঠেকায় | কী ঠেকায় না |
 |---|---|---|
 | আন্দাজ | CSPRNG থেকে ২৫৬ bit (অধ্যায় ৪) | চুরি-যাওয়া ID |
-| নেটওয়ার্কে আড়ি | TLS, `Secure`, HSTS | যার device-এই ID আছে |
+| নেটওয়ার্কে আড়ি | TLS, `Secure`, **HSTS (HTTP Strict Transport Security)** | যার device-এই ID আছে |
 | URL, `Referer`, history | ID শুধু cookie-তে, URL-এ কখনো নয় | |
 | Log বা trace ফাঁস | log-এ ID-র hash, raw নয় | অন্য কোনো পথে পাওয়া ID |
 | Store-এর dump | store-এ hash (অধ্যায় ৪) | store-এ লেখার ক্ষমতা |
